@@ -1,18 +1,62 @@
 export async function POST(request: Request) {
   try {
-    const { type, field } = await request.json()
+    console.log("[v0] === GET METAOBJECT DEFINITION API CALLED ===")
+
+    // Parse request body
+    let requestBody
+    try {
+      requestBody = await request.json()
+      console.log("[v0] Request body:", JSON.stringify(requestBody, null, 2))
+    } catch (parseError) {
+      console.error("[v0] Failed to parse request body:", parseError)
+      return Response.json(
+        { error: "Invalid JSON in request body" },
+        {
+          status: 400,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        },
+      )
+    }
+
+    const { type, field } = requestBody
 
     console.log("[v0] Getting metaobject definition for:", { type, field })
 
+    // Check environment variables
     const storeUrl = process.env.SHOPIFY_STORE_URL
     const accessToken = process.env.SHOPIFY_ACCESS_TOKEN
     const storeDomain = process.env.STORE_DOMAIN
 
-    if (!storeUrl || !accessToken || !storeDomain) {
-      return Response.json({ error: "Missing Shopify credentials" }, { status: 500 })
+    console.log("[v0] Environment variables check:")
+    console.log("[v0] - SHOPIFY_STORE_URL:", storeUrl ? "✓ Set" : "✗ Missing")
+    console.log("[v0] - SHOPIFY_ACCESS_TOKEN:", accessToken ? `✓ Set (${accessToken.length} chars)` : "✗ Missing")
+    console.log("[v0] - STORE_DOMAIN:", storeDomain ? `✓ Set (${storeDomain})` : "✗ Missing")
+
+    if (!accessToken || !storeDomain) {
+      const missingVars = []
+      if (!accessToken) missingVars.push("SHOPIFY_ACCESS_TOKEN")
+      if (!storeDomain) missingVars.push("STORE_DOMAIN")
+
+      console.error("[v0] Missing required environment variables:", missingVars)
+      return Response.json(
+        { error: `Missing required environment variables: ${missingVars.join(", ")}` },
+        {
+          status: 500,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        },
+      )
     }
 
     const apiUrl = `https://${storeDomain}.myshopify.com/admin/api/2025-01/graphql.json`
+    console.log("[v0] Constructed API URL:", apiUrl)
 
     const query = `
       query {
@@ -49,9 +93,24 @@ export async function POST(request: Request) {
       body: JSON.stringify({ query }),
     })
 
+    console.log("[v0] Shopify API response status:", response.status)
+    console.log("[v0] Shopify API response headers:", Object.fromEntries(response.headers.entries()))
+
     if (!response.ok) {
+      const errorText = await response.text()
       console.error("[v0] Shopify API error:", response.status, response.statusText)
-      return Response.json({ error: `Shopify API error: ${response.status}` }, { status: response.status })
+      console.error("[v0] Shopify API error body:", errorText)
+      return Response.json(
+        { error: `Shopify API error: ${response.status} - ${errorText}` },
+        {
+          status: response.status,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        },
+      )
     }
 
     const data = await response.json()
@@ -108,9 +167,10 @@ export async function POST(request: Request) {
       },
     )
   } catch (error) {
-    console.error("[v0] Error getting metaobject definition:", error)
+    console.error("[v0] Unexpected error in get-metaobject-definition:", error)
+    console.error("[v0] Error stack:", error.stack)
     return Response.json(
-      { error: error.message },
+      { error: `Unexpected error: ${error.message}` },
       {
         status: 500,
         headers: {
@@ -133,3 +193,4 @@ export async function OPTIONS(request: Request) {
     },
   })
 }
+
