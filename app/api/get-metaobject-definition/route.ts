@@ -1,4 +1,6 @@
-export async function POST(request: Request) {
+import { type NextRequest, NextResponse } from "next/server"
+
+export async function POST(request: NextRequest) {
   try {
     console.log("[v0] === GET METAOBJECT DEFINITION API CALLED ===")
 
@@ -9,7 +11,7 @@ export async function POST(request: Request) {
       console.log("[v0] Request body:", JSON.stringify(requestBody, null, 2))
     } catch (parseError) {
       console.error("[v0] Failed to parse request body:", parseError)
-      return Response.json(
+      return NextResponse.json(
         { error: "Invalid JSON in request body" },
         {
           status: 400,
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
       if (!storeDomain) missingVars.push("STORE_DOMAIN")
 
       console.error("[v0] Missing required environment variables:", missingVars)
-      return Response.json(
+      return NextResponse.json(
         { error: `Missing required environment variables: ${missingVars.join(", ")}` },
         {
           status: 500,
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
       const errorText = await response.text()
       console.error("[v0] Shopify API error:", response.status, response.statusText)
       console.error("[v0] Shopify API error body:", errorText)
-      return Response.json(
+      return NextResponse.json(
         { error: `Shopify API error: ${response.status} - ${errorText}` },
         {
           status: response.status,
@@ -118,21 +120,51 @@ export async function POST(request: Request) {
 
     if (data.errors) {
       console.error("[v0] GraphQL errors:", data.errors)
-      return Response.json({ error: "GraphQL errors", details: data.errors }, { status: 400 })
+      return NextResponse.json(
+        { error: "GraphQL errors", details: data.errors },
+        {
+          status: 400,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        },
+      )
     }
 
     const customerEventDef = data.data?.metaobjectDefinitions?.edges?.find((edge) => edge.node.type === type)
 
     if (!customerEventDef) {
       console.log("[v0] Metaobject definition not found for type:", type)
-      return Response.json({ error: `Metaobject definition not found for type: ${type}` }, { status: 404 })
+      return NextResponse.json(
+        { error: `Metaobject definition not found for type: ${type}` },
+        {
+          status: 404,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        },
+      )
     }
 
     const occasionField = customerEventDef.node.fieldDefinitions.find((fieldDef) => fieldDef.key === field)
 
     if (!occasionField) {
       console.log("[v0] Field not found:", field)
-      return Response.json({ error: `Field not found: ${field}` }, { status: 404 })
+      return NextResponse.json(
+        { error: `Field not found: ${field}` },
+        {
+          status: 404,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        },
+      )
     }
 
     let choices = []
@@ -153,7 +185,7 @@ export async function POST(request: Request) {
 
     console.log("[v0] Extracted choices:", choices)
 
-    return Response.json(
+    return NextResponse.json(
       {
         choices,
         fieldDefinition: occasionField,
@@ -169,7 +201,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[v0] Unexpected error in get-metaobject-definition:", error)
     console.error("[v0] Error stack:", error.stack)
-    return Response.json(
+    return NextResponse.json(
       { error: `Unexpected error: ${error.message}` },
       {
         status: 500,
@@ -183,8 +215,8 @@ export async function POST(request: Request) {
   }
 }
 
-export async function OPTIONS(request: Request) {
-  return new Response(null, {
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
     status: 200,
     headers: {
       "Access-Control-Allow-Origin": "*",
@@ -193,4 +225,5 @@ export async function OPTIONS(request: Request) {
     },
   })
 }
+
 
