@@ -1,0 +1,469 @@
+{% comment %} Customer Event Form — BLOCK {% endcomment %}
+<div class="customer-event-form"
+     id="customer-event-form-{{ block.id }}"
+     data-api-url="{{ block.settings.api_url | escape }}"
+     data-block="customer-event-form">
+
+  {% comment %} Get dropdown options dynamically from metaobject definition instead of hardcoding {% endcomment %}
+  {% assign occasion_options = null %}
+
+  {% comment %} Method 1: Try accessing through shop.metaobjects {% endcomment %}
+  {% for metaobject_type in shop.metaobject_definitions %}
+    {% if metaobject_type.type == 'customer_event' %}
+      {% for field in metaobject_type.fields %}
+        {% if field.key == 'occasion_type' %}
+          {% if field.validations.choices %}
+            {% assign occasion_options = field.validations.choices %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endfor %}
+
+  {% comment %} Method 2: Try direct access {% endcomment %}
+  {% unless occasion_options %}
+    {% assign customer_event_type = shop.metaobject_definitions.customer_event %}
+    {% if customer_event_type %}
+      {% for field in customer_event_type.fields %}
+        {% if field.key == 'occasion_type' and field.validations.choices %}
+          {% assign occasion_options = field.validations.choices %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endunless %}
+
+  {% comment %} Fallback to hardcoded options that we know work {% endcomment %}
+  {% unless occasion_options %}
+    {% assign occasion_options = "Dad's Birthday,Mum's Birthday,Family Birthday,Friend's Birthday,Anniversary,Mother's Day,Father's Day,Easter,Other" | split: "," %}
+  {% endunless %}
+
+  {% if customer %}
+    <div class="form-card">
+      <h3 class="h5">{{ block.settings.heading }}</h3>
+      <p class="customer-info">Logged in as: {{ customer.first_name }} {{ customer.last_name }}</p>
+
+      <form class="form-content" novalidate>
+        <input type="hidden" class="customer-gid" value="gid://shopify/Customer/{{ customer.id }}" />
+        <!-- Added hidden field to track occasion ID for editing -->
+        <input type="hidden" class="occasion-id" value="" />
+
+        <div class="form-group">
+          <label>Date *</label>
+          <input type="date" class="event-date" required />
+        </div>
+
+        <div class="form-group">
+          <label>Occasion Type *</label>
+          <select class="occasion-type" required>
+            <option value="">Select occasion</option>
+            {% comment %} Simplified dropdown rendering {% endcomment %}
+            {% if occasion_options.first.value %}
+              {% comment %} If options have value/label structure {% endcomment %}
+              {% for choice in occasion_options %}
+                <option value="{{ choice.value | default: choice }}">{{ choice.label | default: choice.value | default: choice }}</option>
+              {% endfor %}
+            {% else %}
+              {% comment %} If options are simple strings {% endcomment %}
+              {% for opt in occasion_options %}
+                <option value="{{ opt | strip }}">{{ opt | strip }}</option>
+              {% endfor %}
+            {% endif %}
+          </select>
+        </div>
+
+        <div class="form-group other-occasion-group" hidden>
+          <label>Other Occasion</label>
+          <input type="text" class="other-occasion" placeholder="Specify the occasion" />
+        </div>
+
+        <div class="form-group">
+          <label>Occasion Name *</label>
+          <input type="text" class="occasion-name" required placeholder="Enter occasion name" />
+        </div>
+
+        <button type="submit" class="button button-primary submit-btn">
+          <span class="btn-text">{{ block.settings.button_label }}</span>
+          <span class="btn-loading" hidden>Creating Event...</span>
+        </button>
+
+        <!-- Added delete button for editing mode -->
+        <button type="button" class="button button-danger delete-btn" hidden>
+          <span class="delete-text">Delete Occasion</span>
+          <span class="delete-loading" hidden>Deleting...</span>
+        </button>
+      </form>
+
+      <div class="form-message" hidden></div>
+    </div>
+  {% else %}
+    <div class="login-required">
+      <h5>Please log in to create a customer event</h5>
+      <p><a href="/account/login">Log in to your account</a></p>
+    </div>
+  {% endif %}
+</div>
+
+{% stylesheet %}
+.customer-event-form{max-width:500px;margin:0 auto}
+.customer-event-form .form-card{background:#fff;border-radius:8px;padding:24px}
+.customer-event-form .form-group{margin-bottom:20px}
+.customer-event-form .form-group label{display:block;margin-bottom:6px;font-weight:500}
+.customer-event-form .form-group input,.customer-event-form .form-group select{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px}
+.customer-event-form .form-message{margin-top:16px;padding:12px;border-radius:6px;text-align:center}
+.customer-event-form .form-message.success{background:#d4edda;color:#155724}
+.customer-event-form .form-message.error{background:#f8d7da;color:#721c24}
+{% endstylesheet %}
+
+{% javascript %}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-block="customer-event-form"]').forEach((root) => {
+    const form = root.querySelector('form'); if (!form) return;
+    const endpoint = (root.dataset.apiUrl || '').trim();
+    
+    console.log('[v0] API endpoint from settings:', endpoint);
+    console.log('[v0] Current domain:', window.location.origin);
+    console.log('[v0] Is endpoint relative?', !endpoint.startsWith('http'));
+    
+    if (endpoint && !endpoint.startsWith('http')) {
+      console.warn('[v0] WARNING: API endpoint appears to be relative. This will call your Shopify store instead of your v0 project!');
+      console.warn('[v0] Expected format: https://your-v0-project.vercel.app/api/create-metaobject');
+    }
+    
+    const occSel = form.querySelector('.occasion-type');
+    const otherGroup = form.querySelector('.other-occasion-group');
+    const otherInput = form.querySelector('.other-occasion');
+    const submitBtn = form.querySelector('.submit-btn');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const btnLoading = submitBtn.querySelector('.btn-loading');
+    const deleteBtn = form.querySelector('.delete-btn');
+    const deleteText = deleteBtn.querySelector('.delete-text');
+    const deleteLoading = deleteBtn.querySelector('.delete-loading');
+    const occasionIdInput = form.querySelector('.occasion-id');
+    const messageDiv = root.querySelector('.form-message');
+
+    if (!endpoint) {
+      messageDiv.className = 'form-message error';
+      messageDiv.textContent = 'Missing API endpoint URL. Please set it in the block settings.';
+      messageDiv.hidden = false;
+      return;
+    }
+
+    async function loadDynamicDropdownOptions() {
+      try {
+        console.log('[v0] Attempting to fetch metaobject definition dynamically...');
+        
+        let metaDefUrl;
+        if (endpoint.startsWith('http')) {
+          // Full URL provided - replace the path
+          const baseUrl = endpoint.replace('/api/create-metaobject', '');
+          metaDefUrl = `${baseUrl}/api/get-metaobject-definition`;
+        } else {
+          // Relative URL - this won't work, show error
+          console.error('[v0] Cannot use relative URL for dynamic lookup. Need full v0 project URL.');
+          messageDiv.className = 'form-message error';
+          messageDiv.textContent = 'API endpoint must be a full URL (https://your-v0-project.vercel.app/api/create-metaobject) for dynamic dropdown to work.';
+          messageDiv.hidden = false;
+          return false;
+        }
+        
+        console.log('[v0] Fetching metaobject definition from:', metaDefUrl);
+        
+        const response = await fetch(metaDefUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ 
+            type: 'customer_event',
+            field: 'occasion_type'
+          })
+        });
+        
+        console.log('[v0] Metaobject definition response status:', response.status);
+        console.log('[v0] Metaobject definition response ok:', response.ok);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[v0] Metaobject definition response:', data);
+          
+          if (data.choices && Array.isArray(data.choices) && data.choices.length > 0) {
+            console.log('[v0] Found dynamic choices:', data.choices);
+            
+            // Clear existing options except the first placeholder
+            while (occSel.children.length > 1) {
+              occSel.removeChild(occSel.lastChild);
+            }
+            
+            // Add dynamic options
+            data.choices.forEach(choice => {
+              const option = document.createElement('option');
+              option.value = choice;
+              option.textContent = choice;
+              occSel.appendChild(option);
+            });
+            
+            console.log('[v0] Successfully populated dropdown with dynamic options');
+            return true;
+          } else {
+            console.log('[v0] No choices found in response:', data);
+          }
+        } else {
+          const errorText = await response.text();
+          console.error('[v0] API error:', response.status, errorText);
+        }
+        
+        console.log('[v0] Dynamic lookup failed, keeping hardcoded options');
+        return false;
+        
+      } catch (error) {
+        console.error('[v0] Error fetching dynamic dropdown options:', error);
+        console.log('[v0] Dynamic lookup failed, keeping hardcoded options');
+        return false;
+      }
+    }
+
+    loadDynamicDropdownOptions();
+
+    async function debugAvailableData() {
+      console.log('[v0] === DEBUGGING AVAILABLE DATA ===');
+      console.log('[v0] Window location:', window.location.href);
+      console.log('[v0] Available Shopify objects in window:', Object.keys(window).filter(k => k.toLowerCase().includes('shop')));
+      
+      // Try to see what's actually available
+      if (window.Shopify) {
+        console.log('[v0] Shopify object:', window.Shopify);
+      }
+    }
+
+    // Debug what's available
+    debugAvailableData();
+
+    occSel.addEventListener('change', () => {
+      const show = occSel.value.toLowerCase() === 'other';
+      otherGroup.hidden = !show;
+      if (!show) otherInput.value = '';
+    });
+
+    const toIso = (v) => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+      const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : v;
+    };
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true; btnText.hidden = true; btnLoading.hidden = false; messageDiv.hidden = true;
+
+      const isEditing = !!occasionIdInput.value;
+      const payload = {
+        customer: form.querySelector('.customer-gid').value,
+        date: toIso(form.querySelector('.event-date').value),
+        occasion_type: occSel.value,
+        other_occasion: otherInput.value,
+        occasion_name: form.querySelector('.occasion-name').value
+      };
+
+      if (isEditing) {
+        payload.id = occasionIdInput.value;
+      }
+
+      console.log('[v0] === FORM SUBMISSION DEBUG ===');
+      console.log('[v0] Is editing:', isEditing);
+      console.log('[v0] Payload being sent:', JSON.stringify(payload, null, 2));
+      console.log('[v0] Making request to:', endpoint);
+      console.log('[v0] Request method: POST');
+      console.log('[v0] Content-Type: application/json');
+
+      try {
+        const startTime = Date.now();
+        console.log('[v0] Starting fetch request...');
+        
+        const r = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        const endTime = Date.now();
+        console.log(`[v0] Request completed in ${endTime - startTime}ms`);
+        console.log('[v0] Response status:', r.status);
+        console.log('[v0] Response ok:', r.ok);
+        console.log('[v0] Response headers:', Object.fromEntries(r.headers.entries()));
+        
+        const text = await r.text();
+        console.log('[v0] Raw response text:', text);
+        
+        let j; 
+        try { 
+          j = text ? JSON.parse(text) : {}; 
+          console.log('[v0] Parsed JSON response:', j);
+        } catch (parseError) { 
+          console.error('[v0] Failed to parse JSON response:', parseError);
+          j = {}; 
+        }
+
+        if (!r.ok) {
+          const errorMsg = j.error || text || `HTTP ${r.status}: ${r.statusText}`;
+          console.error('[v0] Request failed:', errorMsg);
+          throw new Error(errorMsg);
+        }
+
+        console.log('[v0] SUCCESS: Event', isEditing ? 'updated' : 'created', 'successfully!');
+        messageDiv.className = 'form-message success';
+        messageDiv.textContent = `Event ${isEditing ? 'updated' : 'created'} successfully!`;
+        
+        clearFormToCreateMode();
+        
+      } catch (err) {
+        console.error('[v0] === ERROR DETAILS ===');
+        console.error('[v0] Error type:', err.constructor.name);
+        console.error('[v0] Error message:', err.message);
+        console.error('[v0] Full error:', err);
+        
+        messageDiv.className = 'form-message error';
+        
+        if (err.message.includes('Failed to fetch')) {
+          messageDiv.textContent = 'Network error: Cannot reach API endpoint. Check if the URL is correct and accessible.';
+        } else if (err.message.includes('CORS')) {
+          messageDiv.textContent = 'CORS error: API endpoint may not allow requests from this domain.';
+        } else {
+          messageDiv.textContent = `Error: ${err.message}`;
+        }
+        
+      } finally {
+        messageDiv.hidden = false; 
+        submitBtn.disabled = false; 
+        btnText.hidden = false; 
+        btnLoading.hidden = true;
+      }
+    });
+
+    window.populateFormForEdit = function(occasionData) {
+      console.log('[v0] Populating form for edit:', occasionData);
+      
+      // Populate form fields
+      form.querySelector('.event-date').value = occasionData.date;
+      form.querySelector('.occasion-type').value = occasionData.occasion_type;
+      form.querySelector('.occasion-name').value = occasionData.occasion_name;
+      occasionIdInput.value = occasionData.id;
+      
+      // Handle "Other" occasion type
+      if (occasionData.occasion_type === 'Other' && occasionData.other_occasion) {
+        otherGroup.hidden = false;
+        otherInput.value = occasionData.other_occasion;
+      }
+      
+      // Update UI for edit mode
+      btnText.textContent = 'Update Occasion';
+      deleteBtn.hidden = false;
+      
+      // Scroll to form
+      root.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.clearFormToCreateMode = function() {
+      form.reset();
+      otherGroup.hidden = true;
+      occasionIdInput.value = '';
+      btnText.textContent = '{{ block.settings.button_label }}';
+      deleteBtn.hidden = true;
+      messageDiv.hidden = true;
+      
+      if (window.refreshOccasionsDisplay) {
+        setTimeout(() => window.refreshOccasionsDisplay(), 100);
+      }
+    };
+
+    deleteBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      
+      if (!occasionIdInput.value) {
+        showMessage('error', 'No occasion selected for deletion.');
+        return;
+      }
+      
+      if (!confirm('Are you sure you want to delete this occasion? This action cannot be undone.')) {
+        return;
+      }
+      
+      deleteBtn.disabled = true; 
+      deleteText.hidden = true; 
+      deleteLoading.hidden = false; 
+      messageDiv.hidden = true;
+      
+      try {
+        console.log('[v0] Deleting occasion:', occasionIdInput.value);
+        
+        let deleteEndpoint;
+        if (endpoint.startsWith('http')) {
+          deleteEndpoint = endpoint.replace('/api/create-metaobject', '/api/delete-metaobject');
+        } else {
+          throw new Error('Cannot delete with relative URL. Need full v0 project URL.');
+        }
+        
+        const response = await fetch(deleteEndpoint, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ 
+            id: occasionIdInput.value,
+            customer: form.querySelector('.customer-gid').value
+          })
+        });
+        
+        const responseText = await response.text();
+        let responseData;
+        try {
+          responseData = responseText ? JSON.parse(responseText) : {};
+        } catch (parseError) {
+          responseData = {};
+        }
+        
+        if (!response.ok) {
+          const errorMsg = responseData.error || responseText || `HTTP ${response.status}: ${response.statusText}`;
+          throw new Error(errorMsg);
+        }
+        
+        console.log('[v0] SUCCESS: Occasion deleted successfully!');
+        messageDiv.className = 'form-message success';
+        messageDiv.textContent = 'Occasion deleted successfully!';
+        
+        // Reset form to create mode
+        clearFormToCreateMode();
+        
+        // Refresh occasions display if available
+        if (window.refreshOccasionsDisplay) {
+          window.refreshOccasionsDisplay();
+        }
+        
+      } catch (error) {
+        console.error('[v0] Delete error:', error);
+        messageDiv.className = 'form-message error';
+        messageDiv.textContent = `Delete failed: ${error.message}`;
+      } finally {
+        messageDiv.hidden = false;
+        deleteBtn.disabled = false;
+        deleteText.hidden = false;
+        deleteLoading.hidden = true;
+      }
+    });
+  });
+});
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "Add Occasions",
+  "settings": [
+    { "type":"text","id":"heading","label":"Heading","default":"Create Customer Event" },
+    { "type":"text","id":"button_label","label":"Button label","default":"Add Occasion" },
+    { "type":"text","id":"api_url","label":"API endpoint URL","default":"/api/create-metaobject" }
+  ]
+}
+{% endschema %}

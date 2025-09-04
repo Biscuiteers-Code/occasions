@@ -1,0 +1,249 @@
+{% comment %} My Occasions Display — BLOCK {% endcomment %}
+<div class="my-occasions-display"
+     id="my-occasions-display-{{ block.id }}"
+     data-api-url="{{ block.settings.api_url | escape }}"
+     data-block="my-occasions-display">
+
+  {% if customer %}
+    <div class="occasions-card">
+      <h3 class="h5">{{ block.settings.heading }}</h3>
+      
+      <div class="occasions-grid" id="occasions-grid-{{ block.id }}">
+        <div class="loading-message">Loading your occasions...</div>
+      </div>
+      
+      <div class="occasions-message" hidden></div>
+    </div>
+  {% else %}
+    <div class="login-required">
+      <h5>Please log in to view your occasions</h5>
+      <p><a href="/account/login">Log in to your account</a></p>
+    </div>
+  {% endif %}
+</div>
+
+{% stylesheet %}
+.my-occasions-display{max-width:800px;margin:0 auto}
+.my-occasions-display .occasions-card{background:#fff;border-radius:8px;padding:24px}
+.my-occasions-display .occasions-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.my-occasions-display .occasion-item{border:1px solid #e5e5e5;border-radius:8px;padding:16px;position:relative}
+.my-occasions-display .occasion-item .occasion-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.my-occasions-display .occasion-item .occasion-name{font-weight:600;font-size:16px;margin:0}
+.my-occasions-display .occasion-item .occasion-date{color:#666;font-size:14px;margin:4px 0 12px 0}
+.my-occasions-display .occasion-item .edit-btn{background:none;border:1px solid #ddd;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:12px;color:#666}
+.my-occasions-display .occasion-item .edit-btn:hover{background:#f5f5f5}
+.my-occasions-display .occasion-item .gift-btn{width:100%;padding:12px;background:var(--color-button,#e91e63);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:500}
+.my-occasions-display .occasion-item .gift-btn:hover{opacity:0.9}
+.my-occasions-display .add-occasion-item{border:2px dashed #ddd;border-radius:8px;padding:32px;text-align:center;display:flex;align-items:center;justify-content:center}
+.my-occasions-display .add-occasion-btn{background:none;border:1px solid var(--color-button,#e91e63);color:var(--color-button,#e91e63);padding:12px 24px;border-radius:6px;cursor:pointer;font-weight:500}
+.my-occasions-display .add-occasion-btn:hover{background:var(--color-button,#e91e63);color:white}
+.my-occasions-display .occasions-message{margin-top:16px;padding:12px;border-radius:6px;text-align:center}
+.my-occasions-display .occasions-message.success{background:#d4edda;color:#155724}
+.my-occasions-display .occasions-message.error{background:#f8d7da;color:#721c24}
+.my-occasions-display .loading-message{grid-column:1/-1;text-align:center;padding:40px;color:#666}
+@media (max-width:600px){.my-occasions-display .occasions-grid{grid-template-columns:1fr}}
+{% endstylesheet %}
+
+{% javascript %}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-block="my-occasions-display"]').forEach((root) => {
+    const grid = root.querySelector('.occasions-grid');
+    const messageDiv = root.querySelector('.occasions-message');
+    const endpoint = (root.dataset.apiUrl || '').trim();
+    
+    const giftUrls = {
+      "Dad's Birthday": "{{ block.settings.dads_birthday_url }}",
+      "Mum's Birthday": "{{ block.settings.mums_birthday_url }}",
+      "Family Birthday": "{{ block.settings.family_birthday_url }}",
+      "Friend's Birthday": "{{ block.settings.friends_birthday_url }}",
+      "Anniversary": "{{ block.settings.anniversary_url }}",
+      "Mother's Day": "{{ block.settings.mothers_day_url }}",
+      "Father's Day": "{{ block.settings.fathers_day_url }}",
+      "Easter": "{{ block.settings.easter_url }}",
+      "Other": "{{ block.settings.other_url }}"
+    };
+
+    if (!endpoint) {
+      showMessage('error', 'Missing API endpoint URL. Please set it in the block settings.');
+      return;
+    }
+
+    function showMessage(type, text) {
+      messageDiv.className = `occasions-message ${type}`;
+      messageDiv.textContent = text;
+      messageDiv.hidden = false;
+    }
+
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      const day = date.getDate();
+      const month = date.toLocaleDateString('en-GB', { month: 'long' });
+      
+      // Add ordinal suffix
+      const suffix = day === 1 || day === 21 || day === 31 ? 'st' :
+                    day === 2 || day === 22 ? 'nd' :
+                    day === 3 || day === 23 ? 'rd' : 'th';
+      
+      return `${day}${suffix} ${month}`;
+    }
+
+    function createOccasionItem(occasion) {
+      const item = document.createElement('div');
+      item.className = 'occasion-item';
+      item.dataset.occasionId = occasion.id;
+      
+      const giftUrl = giftUrls[occasion.occasion_type] || giftUrls["Other"] || '#';
+      const formattedDate = formatDate(occasion.date);
+      
+      item.innerHTML = `
+        <div class="occasion-header">
+          <div>
+            <h4 class="occasion-name">${occasion.occasion_name}</h4>
+            <p class="occasion-date">${formattedDate}</p>
+          </div>
+          <button class="edit-btn" onclick="editOccasion('${occasion.id}', ${JSON.stringify(occasion).replace(/"/g, '&quot;')})">⋯</button>
+        </div>
+        <button class="gift-btn" onclick="window.location.href='${giftUrl}'">
+          Find a gift for ${formattedDate}
+        </button>
+      `;
+      
+      return item;
+    }
+
+    function createAddOccasionItem() {
+      const item = document.createElement('div');
+      item.className = 'add-occasion-item';
+      item.innerHTML = `
+        <button class="add-occasion-btn" onclick="scrollToAddForm()">
+          add an occasion
+        </button>
+      `;
+      return item;
+    }
+
+    async function loadOccasions() {
+      try {
+        console.log('[v0] Loading customer occasions...');
+        
+        let occasionsUrl;
+        if (endpoint.startsWith('http')) {
+          const baseUrl = endpoint.replace('/api/create-metaobject', '');
+          occasionsUrl = `${baseUrl}/api/get-occasions`;
+        } else {
+          console.error('[v0] Cannot fetch occasions with relative URL. Need full v0 project URL.');
+          showMessage('error', 'API endpoint must be a full URL to load occasions.');
+          return;
+        }
+        
+        const response = await fetch(occasionsUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ 
+            customer: "gid://shopify/Customer/{{ customer.id }}"
+          })
+        });
+        
+        let occasions = [];
+        if (response.ok) {
+          const data = await response.json();
+          occasions = data.occasions || [];
+        } else {
+          console.error('[v0] Failed to load occasions:', response.status);
+          // Fallback to empty array
+        }
+        
+        console.log('[v0] Found occasions:', occasions);
+        
+        // Clear loading message
+        grid.innerHTML = '';
+        
+        // Add occasions to grid
+        occasions.forEach(occasion => {
+          grid.appendChild(createOccasionItem(occasion));
+        });
+        
+        // Add "add occasion" button in next available space
+        grid.appendChild(createAddOccasionItem());
+        
+        if (occasions.length === 0) {
+          showMessage('info', 'No occasions found. Add your first occasion below!');
+        }
+        
+      } catch (error) {
+        console.error('[v0] Error loading occasions:', error);
+        showMessage('error', 'Failed to load occasions. Please try again.');
+      }
+    }
+
+    window.editOccasion = function(occasionId, occasionData) {
+      console.log('[v0] Edit occasion:', occasionId, occasionData);
+      
+      // Find the form block
+      const formBlock = document.querySelector('[data-block="customer-event-form"]');
+      if (formBlock) {
+        // Scroll to form first
+        formBlock.scrollIntoView({ behavior: 'smooth' });
+        
+        // Wait a moment for scroll, then populate
+        setTimeout(() => {
+          if (window.populateFormForEdit) {
+            window.populateFormForEdit(occasionData);
+          } else {
+            console.error('[v0] populateFormForEdit function not found');
+          }
+        }, 500);
+      } else {
+        console.error('[v0] Form block not found');
+        showMessage('error', 'Form block not found on this page.');
+      }
+    };
+
+    window.scrollToAddForm = function() {
+      console.log('[v0] Scroll to add form');
+      const formBlock = document.querySelector('[data-block="customer-event-form"]');
+      if (formBlock) {
+        // Clear form to create mode first
+        if (window.clearFormToCreateMode) {
+          window.clearFormToCreateMode();
+        }
+        formBlock.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        console.error('[v0] Form block not found');
+        showMessage('error', 'Form block not found on this page.');
+      }
+    };
+
+    window.refreshOccasionsDisplay = function() {
+      console.log('[v0] Refreshing occasions display');
+      loadOccasions();
+    };
+
+    // Load occasions on page load
+    loadOccasions();
+  });
+});
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "My Occasions",
+  "settings": [
+    { "type":"text","id":"heading","label":"Heading","default":"Occasion Reminders" },
+    { "type":"text","id":"api_url","label":"API endpoint URL","default":"/api/create-metaobject" },
+    { "type":"header","content":"Gift URLs by Occasion Type" },
+    { "type":"url","id":"dads_birthday_url","label":"Dad's Birthday URL" },
+    { "type":"url","id":"mums_birthday_url","label":"Mum's Birthday URL" },
+    { "type":"url","id":"family_birthday_url","label":"Family Birthday URL" },
+    { "type":"url","id":"friends_birthday_url","label":"Friend's Birthday URL" },
+    { "type":"url","id":"anniversary_url","label":"Anniversary URL" },
+    { "type":"url","id":"mothers_day_url","label":"Mother's Day URL" },
+    { "type":"url","id":"fathers_day_url","label":"Father's Day URL" },
+    { "type":"url","id":"easter_url","label":"Easter URL" },
+    { "type":"url","id":"other_url","label":"Other Occasions URL" }
+  ]
+}
+{% endschema %}
