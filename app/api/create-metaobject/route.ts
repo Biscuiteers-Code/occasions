@@ -1,138 +1,178 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server"
 
-export const runtime = "nodejs"; // or 'edge' if you prefer
+// You'll need to add these environment variables to your Vercel project:
+// SHOPIFY_STORE_URL - Your Shopify store URL (e.g., your-store.myshopify.com)
+// SHOPIFY_ACCESS_TOKEN - Your Shopify Admin API access token
 
-type CustomerEventData = {
-  customer: string;
-  date: string;
-  occasion_type: string;
-  other_occasion?: string;
-  occasion_name: string;
-};
-
-function cors(res: NextResponse) {
-  res.headers.set("Access-Control-Allow-Origin", "*"); // lock to your store if you want
-  res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  return res;
+interface CustomerEventData {
+  customer: string
+  date: string
+  occasion_type: string
+  other_occasion?: string
+  occasion_name: string
 }
 
-export async function OPTIONS() {
-  return cors(new NextResponse(null, { status: 204 }));
-}
-
-function normalizeAdminDomain(input?: string): string | null {
-  if (!input) return null;
-  let s = input.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
-  if (!s.includes(".myshopify.com")) s = `${s}.myshopify.com`;
-  return s;
-}
-
-async function shopifyFetch(
-  shop: string,
-  token: string,
-  body: Record<string, unknown>,
-) {
-  const url = `https://${shop}/admin/api/2025-01/graphql.json`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": token,
-      "User-Agent": "CustomerEventMetaobject/1.0",
-    },
-    body: JSON.stringify(body),
-  });
-  return r;
-}
-
-const mutation = /* GraphQL */ `
-  mutation metaobjectCreate($metaobject: MetaobjectCreateInput!) {
-    metaobjectCreate(metaobject: $metaobject) {
-      metaobject { id handle type }
-      userErrors { field message }
-    }
-  }
-`;
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const data = (await req.json()) as CustomerEventData;
+    const eventData: CustomerEventData = await request.json()
 
-    // Basic validation
-    if (!data?.customer || !data?.date || !data?.occasion_type || !data?.occasion_name) {
-      return cors(
-        NextResponse.json(
-          { error: "customer, date, occasion_type, occasion_name are required" },
-          { status: 400 },
-        ),
-      );
+    if (!eventData.customer || !eventData.date || !eventData.occasion_type || !eventData.occasion_name) {
+      return NextResponse.json(
+        { error: "Customer, date, occasion type, and occasion name are required" },
+        { status: 400 },
+      )
     }
 
-    const shop = normalizeAdminDomain(process.env.SHOPIFY_STORE_URL);
-    const token = process.env.SHOPIFY_ACCESS_TOKEN;
+    const shopifyUrl = process.env.SHOPIFY_STORE_URL
+    const accessToken = process.env.SHOPIFY_ACCESS_TOKEN
 
-    if (!shop || !token) {
-      console.error("[metaobject] Missing envs", { hasShop: !!shop, hasToken: !!token });
-      return cors(NextResponse.json({ error: "Server not configured for Shopify" }, { status: 500 }));
+    if (!shopifyUrl || !accessToken) {
+      console.error("[v0] Missing Shopify configuration - URL:", !!shopifyUrl, "Token:", !!accessToken)
+      return NextResponse.json({ error: "Shopify configuration missing" }, { status: 500 })
     }
+
+    let formattedUrl = shopifyUrl
+    if (!shopifyUrl.includes(".myshopify.com")) {
+      formattedUrl = `${shopifyUrl}.myshopify.com`
+    }
+    if (shopifyUrl.startsWith("https://")) {
+      formattedUrl = shopifyUrl.replace("https://", "")
+    }
+
+    // Use the correct store URL that Shopify redirects to
+    const correctStoreUrl = "1eq5ty-dr.myshopify.com"
+    const apiUrl = `https://${correctStoreUrl}/admin/api/2025-01/graphql.json`
+    console.log("[v0] Using correct store URL:", apiUrl)
+    console.log("[v0] Access token length:", accessToken.length)
+
+    const graphqlMutation = `
+      mutation metaobjectCreate($metaobject: MetaobjectCreateInput!) {
+        metaobjectCreate(metaobject: $metaobject) {
+          metaobject {
+            id
+            handle
+            type
+            fields {
+              key
+              value
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `
 
     const variables = {
       metaobject: {
         type: "customer_event",
         fields: [
-          { key: "customer", value: data.customer },
-          { key: "date", value: data.date },
-          { key: "occasion_type", value: data.occasion_type },
-          { key: "other_occasion", value: data.other_occasion || "" },
-          { key: "occasion_name", value: data.occasion_name },
+          {
+            key: "customer",
+            value: eventData.customer,
+          },
+          {
+            key: "date",
+            value: eventData.date,
+          },
+          {
+            key: "occasion_type",
+            value: eventData.occasion_type,
+          },
+          {
+            key: "other_occasion",
+            value: eventData.other_occasion || "",
+          },
+          {
+            key: "occasion_name",
+            value: eventData.occasion_name,
+          },
         ],
       },
-    };
-
-    // (Optional) Simple retry for 429
-    let resp = await shopifyFetch(shop, token, { query: mutation, variables });
-    if (resp.status === 429) {
-      await new Promise((r) => setTimeout(r, 600));
-      resp = await shopifyFetch(shop, token, { query: mutation, variables });
     }
 
-    const text = await resp.text();
-    if (!resp.ok) {
-      console.error("[metaobject] HTTP", resp.status, text?.slice(0, 500));
-      return cors(
-        NextResponse.json({ error: `Shopify API error (${resp.status})` }, { status: 502 }),
-      );
-    }
+    console.log("[v0] Making GraphQL request to Shopify")
+    console.log("[v0] Request payload:", JSON.stringify({ query: graphqlMutation, variables }, null, 2))
 
-    let json: any;
+    let response
     try {
-      json = JSON.parse(text);
-    } catch {
-      console.error("[metaobject] Non-JSON response:", text?.slice(0, 500));
-      return cors(NextResponse.json({ error: "Invalid JSON from Shopify" }, { status: 502 }));
+      response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": accessToken,
+          "User-Agent": "Shopify-Metaobject-App/1.0",
+        },
+        body: JSON.stringify({
+          query: graphqlMutation,
+          variables: variables,
+        }),
+      })
+    } catch (fetchError) {
+      console.error("[v0] Fetch error:", fetchError)
+      return NextResponse.json(
+        {
+          error: `Network error: ${fetchError instanceof Error ? fetchError.message : "Unknown fetch error"}`,
+        },
+        { status: 500 },
+      )
     }
 
-    if (json.errors) {
-      console.error("[metaobject] GraphQL errors", json.errors);
-      return cors(NextResponse.json({ error: "GraphQL errors", details: json.errors }, { status: 502 }));
+    console.log("[v0] Response status:", response.status)
+    console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      console.error("[v0] Shopify API HTTP error:", response.status, errorData)
+      return NextResponse.json(
+        {
+          error: `Shopify API error (${response.status}): ${errorData}`,
+        },
+        { status: 500 },
+      )
     }
 
-    const payload = json?.data?.metaobjectCreate;
-    if (!payload?.metaobject) {
-      const errs = payload?.userErrors || [];
-      console.error("[metaobject] User errors", errs);
-      return cors(
-        NextResponse.json(
-          { error: "Validation errors", details: errs.map((e: any) => e.message) },
-          { status: 400 },
-        ),
-      );
+    const result = await response.json()
+    console.log("[v0] Shopify API response:", JSON.stringify(result, null, 2))
+
+    if (result.errors) {
+      console.error("[v0] GraphQL errors:", result.errors)
+      return NextResponse.json({ error: "GraphQL errors occurred" }, { status: 500 })
     }
 
-    return cors(NextResponse.json({ success: true, metaobject: payload.metaobject }));
-  } catch (e: any) {
-    console.error("[metaobject] Uncaught", e);
-    return cors(NextResponse.json({ error: "Internal server error" }, { status: 500 }));
+    if (result.data?.metaobjectCreate?.userErrors?.length > 0) {
+      const userErrors = result.data.metaobjectCreate.userErrors
+      console.error("[v0] User errors:", userErrors)
+      return NextResponse.json(
+        {
+          error: `Shopify validation errors: ${userErrors.map((e: any) => e.message).join(", ")}`,
+        },
+        { status: 400 },
+      )
+    }
+
+    const metaobject = result.data?.metaobjectCreate?.metaobject
+
+    if (!metaobject) {
+      console.error("[v0] No metaobject returned from Shopify")
+      return NextResponse.json({ error: "Failed to create metaobject" }, { status: 500 })
+    }
+
+    console.log("[v0] Successfully created metaobject:", metaobject.id)
+
+    return NextResponse.json({
+      success: true,
+      metaobject: metaobject,
+    })
+  } catch (error) {
+    console.error("[v0] Error creating metaobject:", error)
+    if (error instanceof Error) {
+      console.error("[v0] Error name:", error.name)
+      console.error("[v0] Error message:", error.message)
+      console.error("[v0] Error stack:", error.stack)
+    }
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
