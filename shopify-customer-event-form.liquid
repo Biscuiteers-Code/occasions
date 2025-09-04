@@ -1,0 +1,254 @@
+<!-- Shopify Liquid Template for Customer Event Form -->
+<div id="customer-event-form-container">
+  {% if customer %}
+    <div class="customer-event-form">
+      <div class="form-card">
+        <div class="form-header">
+          <h2>Create Customer Event</h2>
+          <p class="customer-info">Logged in as: {{ customer.first_name }} {{ customer.last_name }}</p>
+        </div>
+        
+        <form id="customer-event-form" class="form-content">
+          <!-- Hidden customer GID field -->
+          <input type="hidden" id="customer-gid" value="gid://shopify/Customer/{{ customer.id }}" />
+          
+          <div class="form-group">
+            <label for="event-date">Date *</label>
+            <input type="date" id="event-date" name="date" required />
+          </div>
+
+          <div class="form-group">
+            <label for="occasion-type">Occasion Type *</label>
+            <select id="occasion-type" name="occasion_type" required>
+              <option value="">Select occasion type</option>
+              <option value="Dad's Birthday">Dad's Birthday</option>
+              <option value="Mum's Birthday">Mum's Birthday</option>
+              <option value="Family Birthday">Family Birthday</option>
+              <option value="Friend's Birthday">Friend's Birthday</option>
+              <option value="Anniversary">Anniversary</option>
+              <option value="Mother's Day">Mother's Day</option>
+              <option value="Father's Day">Father's Day</option>
+              <option value="Easter">Easter</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="other-occasion-group" style="display: none;">
+            <label for="other-occasion">Other Occasion</label>
+            <input type="text" id="other-occasion" name="other_occasion" placeholder="Specify the occasion" />
+          </div>
+
+          <div class="form-group">
+            <label for="occasion-name">Occasion Name *</label>
+            <input type="text" id="occasion-name" name="occasion_name" required placeholder="Enter occasion name" />
+          </div>
+
+          <button type="submit" class="submit-btn" id="submit-btn">
+            <span class="btn-text">Create Customer Event</span>
+            <span class="btn-loading" style="display: none;">Creating Event...</span>
+          </button>
+        </form>
+
+        <div id="form-message" class="form-message" style="display: none;"></div>
+      </div>
+    </div>
+  {% else %}
+    <div class="login-required">
+      <h3>Please log in to create a customer event</h3>
+      <p><a href="/account/login">Log in to your account</a></p>
+    </div>
+  {% endif %}
+</div>
+
+<style>
+.customer-event-form {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.form-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  padding: 24px;
+}
+
+.form-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.customer-info {
+  color: #666;
+  margin: 0 0 24px 0;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #007cba;
+  box-shadow: 0 0 0 2px rgba(0,124,186,0.1);
+}
+
+.submit-btn {
+  width: 100%;
+  background: #007cba;
+  color: white;
+  border: none;
+  padding: 14px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.submit-btn:hover {
+  background: #005a87;
+}
+
+.submit-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.form-message {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.form-message.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.form-message.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.login-required {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.login-required h3 {
+  margin: 0 0 16px 0;
+  color: #333;
+}
+
+.login-required a {
+  color: #007cba;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-required a:hover {
+  text-decoration: underline;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('customer-event-form');
+  const occasionTypeSelect = document.getElementById('occasion-type');
+  const otherOccasionGroup = document.getElementById('other-occasion-group');
+  const submitBtn = document.getElementById('submit-btn');
+  const btnText = document.querySelector('.btn-text');
+  const btnLoading = document.querySelector('.btn-loading');
+  const messageDiv = document.getElementById('form-message');
+
+  // Show/hide other occasion field
+  occasionTypeSelect.addEventListener('change', function() {
+    if (this.value === 'Other') {
+      otherOccasionGroup.style.display = 'block';
+    } else {
+      otherOccasionGroup.style.display = 'none';
+      document.getElementById('other-occasion').value = '';
+    }
+  });
+
+  // Handle form submission
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    // Set loading state
+    submitBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+    messageDiv.style.display = 'none';
+
+    // Collect form data
+    const formData = {
+      customer: document.getElementById('customer-gid').value,
+      date: document.getElementById('event-date').value,
+      occasion_type: document.getElementById('occasion-type').value,
+      other_occasion: document.getElementById('other-occasion').value,
+      occasion_name: document.getElementById('occasion-name').value
+    };
+
+    try {
+      // Replace with your actual API endpoint URL
+      const response = await fetch('YOUR_API_ENDPOINT_URL/api/create-metaobject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Success
+        messageDiv.className = 'form-message success';
+        messageDiv.textContent = 'Your customer event has been created successfully!';
+        messageDiv.style.display = 'block';
+        
+        // Reset form
+        form.reset();
+        otherOccasionGroup.style.display = 'none';
+      } else {
+        throw new Error(result.error || 'Failed to create customer event');
+      }
+    } catch (error) {
+      // Error
+      messageDiv.className = 'form-message error';
+      messageDiv.textContent = error.message || 'Failed to create customer event. Please try again.';
+      messageDiv.style.display = 'block';
+    } finally {
+      // Reset button state
+      submitBtn.disabled = false;
+      btnText.style.display = 'inline';
+      btnLoading.style.display = 'none';
+    }
+  });
+});
+</script>
