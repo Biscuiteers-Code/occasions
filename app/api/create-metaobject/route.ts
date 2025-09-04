@@ -1,178 +1,108 @@
-import { type NextRequest, NextResponse } from "next/server"
-
-// You'll need to add these environment variables to your Vercel project:
-// SHOPIFY_STORE_URL - Your Shopify store URL (e.g., your-store.myshopify.com)
-// SHOPIFY_ACCESS_TOKEN - Your Shopify Admin API access token
-
-interface CustomerEventData {
-  customer: string
-  date: string
-  occasion_type: string
-  other_occasion?: string
-  occasion_name: string
-}
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const eventData: CustomerEventData = await request.json()
+    const { type, field } = await request.json()
 
-    if (!eventData.customer || !eventData.date || !eventData.occasion_type || !eventData.occasion_name) {
-      return NextResponse.json(
-        { error: "Customer, date, occasion type, and occasion name are required" },
-        { status: 400 },
-      )
-    }
+    console.log("[v0] Getting metaobject definition for:", { type, field })
 
-    const shopifyUrl = process.env.SHOPIFY_STORE_URL
+    const storeUrl = process.env.SHOPIFY_STORE_URL
     const accessToken = process.env.SHOPIFY_ACCESS_TOKEN
 
-    if (!shopifyUrl || !accessToken) {
-      console.error("[v0] Missing Shopify configuration - URL:", !!shopifyUrl, "Token:", !!accessToken)
-      return NextResponse.json({ error: "Shopify configuration missing" }, { status: 500 })
+    if (!storeUrl || !accessToken) {
+      return Response.json({ error: "Missing Shopify credentials" }, { status: 500 })
     }
 
-    let formattedUrl = shopifyUrl
-    if (!shopifyUrl.includes(".myshopify.com")) {
-      formattedUrl = `${shopifyUrl}.myshopify.com`
-    }
-    if (shopifyUrl.startsWith("https://")) {
-      formattedUrl = shopifyUrl.replace("https://", "")
-    }
+    // Use the correct store URL (the one that works)
+    const apiUrl = `https://1eq5ty-dr.myshopify.com/admin/api/2025-01/graphql.json`
 
-    // Use the correct store URL that Shopify redirects to
-    const correctStoreUrl = "1eq5ty-dr.myshopify.com"
-    const apiUrl = `https://${correctStoreUrl}/admin/api/2025-01/graphql.json`
-    console.log("[v0] Using correct store URL:", apiUrl)
-    console.log("[v0] Access token length:", accessToken.length)
-
-    const graphqlMutation = `
-      mutation metaobjectCreate($metaobject: MetaobjectCreateInput!) {
-        metaobjectCreate(metaobject: $metaobject) {
-          metaobject {
-            id
-            handle
-            type
-            fields {
-              key
-              value
+    const query = `
+      query {
+        metaobjectDefinitions(first: 10) {
+          edges {
+            node {
+              id
+              type
+              fieldDefinitions {
+                key
+                name
+                type {
+                  name
+                }
+                validations {
+                  name
+                  value
+                }
+              }
             }
-          }
-          userErrors {
-            field
-            message
           }
         }
       }
     `
 
-    const variables = {
-      metaobject: {
-        type: "customer_event",
-        fields: [
-          {
-            key: "customer",
-            value: eventData.customer,
-          },
-          {
-            key: "date",
-            value: eventData.date,
-          },
-          {
-            key: "occasion_type",
-            value: eventData.occasion_type,
-          },
-          {
-            key: "other_occasion",
-            value: eventData.other_occasion || "",
-          },
-          {
-            key: "occasion_name",
-            value: eventData.occasion_name,
-          },
-        ],
+    console.log("[v0] Querying Shopify GraphQL API:", apiUrl)
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken,
       },
-    }
-
-    console.log("[v0] Making GraphQL request to Shopify")
-    console.log("[v0] Request payload:", JSON.stringify({ query: graphqlMutation, variables }, null, 2))
-
-    let response
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Shopify-Access-Token": accessToken,
-          "User-Agent": "Shopify-Metaobject-App/1.0",
-        },
-        body: JSON.stringify({
-          query: graphqlMutation,
-          variables: variables,
-        }),
-      })
-    } catch (fetchError) {
-      console.error("[v0] Fetch error:", fetchError)
-      return NextResponse.json(
-        {
-          error: `Network error: ${fetchError instanceof Error ? fetchError.message : "Unknown fetch error"}`,
-        },
-        { status: 500 },
-      )
-    }
-
-    console.log("[v0] Response status:", response.status)
-    console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+      body: JSON.stringify({ query }),
+    })
 
     if (!response.ok) {
-      const errorData = await response.text()
-      console.error("[v0] Shopify API HTTP error:", response.status, errorData)
-      return NextResponse.json(
-        {
-          error: `Shopify API error (${response.status}): ${errorData}`,
-        },
-        { status: 500 },
-      )
+      console.error("[v0] Shopify API error:", response.status, response.statusText)
+      return Response.json({ error: `Shopify API error: ${response.status}` }, { status: response.status })
     }
 
-    const result = await response.json()
-    console.log("[v0] Shopify API response:", JSON.stringify(result, null, 2))
+    const data = await response.json()
+    console.log("[v0] GraphQL response:", JSON.stringify(data, null, 2))
 
-    if (result.errors) {
-      console.error("[v0] GraphQL errors:", result.errors)
-      return NextResponse.json({ error: "GraphQL errors occurred" }, { status: 500 })
+    if (data.errors) {
+      console.error("[v0] GraphQL errors:", data.errors)
+      return Response.json({ error: "GraphQL errors", details: data.errors }, { status: 400 })
     }
 
-    if (result.data?.metaobjectCreate?.userErrors?.length > 0) {
-      const userErrors = result.data.metaobjectCreate.userErrors
-      console.error("[v0] User errors:", userErrors)
-      return NextResponse.json(
-        {
-          error: `Shopify validation errors: ${userErrors.map((e: any) => e.message).join(", ")}`,
-        },
-        { status: 400 },
-      )
+    // Find the customer_event metaobject definition
+    const customerEventDef = data.data?.metaobjectDefinitions?.edges?.find((edge) => edge.node.type === type)
+
+    if (!customerEventDef) {
+      console.log("[v0] Metaobject definition not found for type:", type)
+      return Response.json({ error: `Metaobject definition not found for type: ${type}` }, { status: 404 })
     }
 
-    const metaobject = result.data?.metaobjectCreate?.metaobject
+    // Find the occasion_type field
+    const occasionField = customerEventDef.node.fieldDefinitions.find((fieldDef) => fieldDef.key === field)
 
-    if (!metaobject) {
-      console.error("[v0] No metaobject returned from Shopify")
-      return NextResponse.json({ error: "Failed to create metaobject" }, { status: 500 })
+    if (!occasionField) {
+      console.log("[v0] Field not found:", field)
+      return Response.json({ error: `Field not found: ${field}` }, { status: 404 })
     }
 
-    console.log("[v0] Successfully created metaobject:", metaobject.id)
+    // Extract choices from validations
+    let choices = []
+    if (occasionField.validations) {
+      for (const validation of occasionField.validations) {
+        if (validation.name === "choices" && validation.value) {
+          try {
+            const parsedChoices = JSON.parse(validation.value)
+            if (Array.isArray(parsedChoices)) {
+              choices = parsedChoices
+            }
+          } catch (e) {
+            console.error("[v0] Error parsing choices:", e)
+          }
+        }
+      }
+    }
 
-    return NextResponse.json({
-      success: true,
-      metaobject: metaobject,
+    console.log("[v0] Extracted choices:", choices)
+
+    return Response.json({
+      choices,
+      fieldDefinition: occasionField,
     })
   } catch (error) {
-    console.error("[v0] Error creating metaobject:", error)
-    if (error instanceof Error) {
-      console.error("[v0] Error name:", error.name)
-      console.error("[v0] Error message:", error.message)
-      console.error("[v0] Error stack:", error.stack)
-    }
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] Error getting metaobject definition:", error)
+    return Response.json({ error: error.message }, { status: 500 })
   }
 }
