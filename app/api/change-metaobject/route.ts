@@ -8,12 +8,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    console.log("[v0] === DELETE METAOBJECT API CALLED ===")
+    console.log("[v0] === CHANGE METAOBJECT API CALLED ===")
 
     const body = await request.json()
     console.log("[v0] Request body:", JSON.stringify(body, null, 2))
 
-    const { id, customer } = body
+    const { id, customer, operation, date, occasion_type, occasion_name, other_occasion } = body
 
     if (!id) {
       console.log("[v0] Missing occasion ID")
@@ -25,7 +25,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing customer GID" }, { status: 400, headers: corsHeaders })
     }
 
-    // Environment variables
+    if (!operation || !["update", "delete"].includes(operation)) {
+      console.log("[v0] Invalid or missing operation")
+      return NextResponse.json(
+        { error: "Operation must be 'update' or 'delete'" },
+        { status: 400, headers: corsHeaders },
+      )
+    }
+
     const storeDomain = process.env.STORE_DOMAIN
     const accessToken = process.env.SHOPIFY_ACCESS_TOKEN
 
@@ -40,25 +47,54 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Construct API URL
     const apiUrl = `https://${storeDomain}.myshopify.com/admin/api/2025-01/graphql.json`
     console.log("[v0] API URL:", apiUrl)
 
-    // GraphQL mutation to delete metaobject
-    const mutation = `
-      mutation metaobjectDelete($id: ID!) {
-        metaobjectDelete(id: $id) {
-          deletedId
-          userErrors {
-            field
-            message
+    let mutation, variables
+
+    if (operation === "delete") {
+      mutation = `
+        mutation metaobjectDelete($id: ID!) {
+          metaobjectDelete(id: $id) {
+            deletedId
+            userErrors {
+              field
+              message
+            }
           }
         }
+      `
+      variables = { id: `gid://shopify/Metaobject/${id}` }
+    } else {
+      mutation = `
+        mutation metaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+          metaobjectUpdate(id: $id, metaobject: $metaobject) {
+            metaobject {
+              id
+              handle
+              fields {
+                key
+                value
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `
+      variables = {
+        id: `gid://shopify/Metaobject/${id}`,
+        metaobject: {
+          fields: [
+            { key: "date", value: date },
+            { key: "occasion_type", value: occasion_type },
+            { key: "occasion_name", value: occasion_name },
+            { key: "other_occasion", value: other_occasion || "" },
+          ],
+        },
       }
-    `
-
-    const variables = {
-      id: id,
     }
 
     console.log("[v0] GraphQL mutation:", mutation)
@@ -107,28 +143,51 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const deleteResult = responseData.data?.metaobjectDelete
-    if (deleteResult?.userErrors && deleteResult.userErrors.length > 0) {
-      console.log("[v0] User errors:", deleteResult.userErrors)
+    if (operation === "delete") {
+      const deleteResult = responseData.data?.metaobjectDelete
+      if (deleteResult?.userErrors && deleteResult.userErrors.length > 0) {
+        console.log("[v0] User errors:", deleteResult.userErrors)
+        return NextResponse.json(
+          { error: "User errors", details: deleteResult.userErrors },
+          { status: 400, headers: corsHeaders },
+        )
+      }
+
+      console.log("[v0] SUCCESS: Metaobject deleted successfully")
+      console.log("[v0] Deleted ID:", deleteResult?.deletedId)
+
       return NextResponse.json(
-        { error: "User errors", details: deleteResult.userErrors },
-        { status: 400, headers: corsHeaders },
+        {
+          success: true,
+          deletedId: deleteResult?.deletedId,
+          message: "Metaobject deleted successfully",
+        },
+        { headers: corsHeaders },
+      )
+    } else {
+      const updateResult = responseData.data?.metaobjectUpdate
+      if (updateResult?.userErrors && updateResult.userErrors.length > 0) {
+        console.log("[v0] User errors:", updateResult.userErrors)
+        return NextResponse.json(
+          { error: "User errors", details: updateResult.userErrors },
+          { status: 400, headers: corsHeaders },
+        )
+      }
+
+      console.log("[v0] SUCCESS: Metaobject updated successfully")
+      console.log("[v0] Updated metaobject:", updateResult?.metaobject)
+
+      return NextResponse.json(
+        {
+          success: true,
+          metaobject: updateResult?.metaobject,
+          message: "Metaobject updated successfully",
+        },
+        { headers: corsHeaders },
       )
     }
-
-    console.log("[v0] SUCCESS: Metaobject deleted successfully")
-    console.log("[v0] Deleted ID:", deleteResult?.deletedId)
-
-    return NextResponse.json(
-      {
-        success: true,
-        deletedId: deleteResult?.deletedId,
-        message: "Metaobject deleted successfully",
-      },
-      { headers: corsHeaders },
-    )
   } catch (error) {
-    console.error("[v0] Delete API error:", error)
+    console.error("[v0] Change API error:", error)
     return NextResponse.json(
       { error: "Internal server error", details: error.message },
       { status: 500, headers: corsHeaders },

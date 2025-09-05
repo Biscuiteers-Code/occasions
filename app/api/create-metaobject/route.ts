@@ -48,6 +48,12 @@ export async function POST(request: NextRequest) {
     const isUpdate = !!eventData.id
     console.log("[v0] Operation type:", isUpdate ? "UPDATE" : "CREATE")
 
+    let shopifyId = eventData.id
+    if (isUpdate && eventData.id && !eventData.id.startsWith("gid://")) {
+      shopifyId = `gid://shopify/Metaobject/${eventData.id}`
+      console.log("[v0] Converted ID to GID format:", shopifyId)
+    }
+
     const graphqlMutation = isUpdate
       ? `
         mutation metaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
@@ -90,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     const variables = isUpdate
       ? {
-          id: eventData.id,
+          id: shopifyId, // Use converted GID format
           metaobject: {
             fields: [
               {
