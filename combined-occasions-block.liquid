@@ -1,0 +1,727 @@
+{% comment %} Occasions Manager — BLOCK (with modal portal + high z-index) {% endcomment %}
+<div class="occasions-manager"
+     id="occasions-manager-{{ block.id }}"
+     data-api-url="{{ block.settings.api_url | escape }}"
+     data-block="occasions-manager">
+
+  {%- comment -%} Pass Liquid data to JS safely via JSON {%- endcomment -%}
+  <script type="application/json" data-occasions-config>
+    {
+      "customerId": {% if customer %}"gid://shopify/Customer/{{ customer.id }}"{% else %}null{% endif %},
+      "customerName": {% if customer %}"{{ customer.first_name }} {{ customer.last_name }}"{% else %}null{% endif %},
+      "blockId": "{{ block.id }}",
+      "buttonLabel": "{{ block.settings.button_label | escape }}",
+      "loginUrl": "{{ routes.account_login_url }}",
+      "giftUrls": {
+        "Dad's Birthday": "{{ block.settings.dads_birthday_url | escape }}",
+        "Mum's Birthday": "{{ block.settings.mums_birthday_url | escape }}",
+        "Family Birthday": "{{ block.settings.family_birthday_url | escape }}",
+        "Friend's Birthday": "{{ block.settings.friends_birthday_url | escape }}",
+        "Anniversary": "{{ block.settings.anniversary_url | escape }}",
+        "Mother's Day": "{{ block.settings.mothers_day_url | escape }}",
+        "Father's Day": "{{ block.settings.fathers_day_url | escape }}",
+        "Easter": "{{ block.settings.easter_url | escape }}",
+        "Other": "{{ block.settings.other_url | escape }}"
+      }
+    }
+  </script>
+
+  {% if customer %}
+    <!-- Modal overlay (note the global class for styling after portal) -->
+    <div class="modal-overlay occasions-modal-overlay" id="modal-overlay-{{ block.id }}" style="display:none;">
+      <div class="modal-content" onclick="event.stopPropagation();">
+        <div class="modal-header">
+          <!-- Changed h5 to h3 for form heading -->
+          <h3 class="modal-title">{{ block.settings.form_heading }}</h3>
+          <!-- Replace &times; with close icon SVG -->
+          <button class="modal-close" type="button" onclick="closeModal{{ block.id }}()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M12.854 3.146a.5.5 0 0 0-.708 0L8 7.293 3.854 3.146a.5.5 0 1 0-.708.708L7.293 8l-4.147 4.146a.5.5 0 0 0 .708.708L8.707 8l4.147-4.146a.5.5 0 0 0 0-.708z"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Changed "Logged in as:" to "Hi " + first name only -->
+          <p class="customer-info">Hi {{ customer.first_name }}</p>
+
+          <form class="form-content" novalidate>
+            <input type="hidden" class="customer-gid" value="gid://shopify/Customer/{{ customer.id }}" />
+            <input type="hidden" class="occasion-id" value="" />
+
+            <div class="form-group">
+              <label>Date *</label>
+              <input type="date" class="event-date" required />
+            </div>
+
+            <div class="form-group">
+              <label>Occasion Type *</label>
+              <select class="occasion-type" required>
+                <option value="">Select occasion</option>
+                <option value="Dad's Birthday">Dad's Birthday</option>
+                <option value="Mum's Birthday">Mum's Birthday</option>
+                <option value="Family Birthday">Family Birthday</option>
+                <option value="Friend's Birthday">Friend's Birthday</option>
+                <option value="Anniversary">Anniversary</option>
+                <option value="Mother's Day">Mother's Day</option>
+                <option value="Father's Day">Father's Day</option>
+                <option value="Easter">Easter</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group other-occasion-group" hidden>
+              <label>Other Occasion</label>
+              <input type="text" class="other-occasion" placeholder="Specify the occasion" />
+            </div>
+
+            <div class="form-group">
+              <label>Occasion Name *</label>
+              <input type="text" class="occasion-name" required placeholder="Enter occasion name" />
+            </div>
+
+            <div class="modal-actions">
+              <!-- Change button text to "Add" and add plus icon -->
+              <button type="submit" class="button button-primary submit-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 8px;">
+                  <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                </svg>
+                <span class="btn-text">Add</span>
+                <span class="btn-loading" hidden>Creating Event...</span>
+              </button>
+
+              <button type="button" class="button button-danger delete-btn" hidden onclick="deleteOccasion{{ block.id }}()">
+                <span class="delete-text">Delete Occasion</span>
+                <span class="delete-loading" hidden>Deleting...</span>
+              </button>
+            </div>
+          </form>
+
+          <div class="form-message" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Display section -->
+    <div class="display-section">
+      <div class="occasions-card">
+        <h3 class="h5">{{ block.settings.display_heading }}</h3>
+
+        <div class="occasions-grid">
+          {% if customer.metafields.custom.my_occasions %}
+            {% for occasion in customer.metafields.custom.my_occasions.value limit:10 %}
+              {% assign d = occasion.date | date: "%-d" %}
+              {% case d %}
+                {% when '1' or '21' or '31' %}{% assign suffix = 'st' %}
+                {% when '2' or '22' %}{% assign suffix = 'nd' %}
+                {% when '3' or '23' %}{% assign suffix = 'rd' %}
+                {% else %}{% assign suffix = 'th' %}
+              {% endcase %}
+              {% assign formatted_date = d | append: suffix | append: ' ' | append: occasion.date | date: "%B" %}
+
+              {% assign gift_url = block.settings.other_url %}
+              {% case occasion.occasion_type %}
+                {% when "Dad's Birthday" %}{% assign gift_url = block.settings.dads_birthday_url %}
+                {% when "Mum's Birthday" %}{% assign gift_url = block.settings.mums_birthday_url %}
+                {% when "Family Birthday" %}{% assign gift_url = block.settings.family_birthday_url %}
+                {% when "Friend's Birthday" %}{% assign gift_url = block.settings.friends_birthday_url %}
+                {% when "Anniversary" %}{% assign gift_url = block.settings.anniversary_url %}
+                {% when "Mother's Day" %}{% assign gift_url = block.settings.mothers_day_url %}
+                {% when "Father's Day" %}{% assign gift_url = block.settings.fathers_day_url %}
+                {% when "Easter" %}{% assign gift_url = block.settings.easter_url %}
+              {% endcase %}
+
+              <div class="occasion-item" data-occasion-id="{{ occasion.id | default: forloop.index }}">
+                <div class="occasion-header">
+                  <div>
+                    <h4 class="occasion-name">{{ occasion.occasion_name }}</h4>
+                    <p class="occasion-date">{{ formatted_date }}</p>
+                  </div>
+                  <!-- Replace onclick with data attributes to avoid apostrophe issues -->
+                  <button class="edit-btn"
+                          data-occasion-id="{{ occasion.id | default: forloop.index }}"
+                          data-occasion-date="{{ occasion.date }}"
+                          data-occasion-type="{{ occasion.occasion_type }}"
+                          data-occasion-name="{{ occasion.occasion_name }}"
+                          data-other-occasion="{{ occasion.other_occasion }}">⋯</button>
+                </div>
+                {% if gift_url and gift_url != blank %}
+                  <button class="gift-btn" onclick="window.location.href='{{ gift_url | escape }}'">
+                    Find a gift for {{ formatted_date }}
+                  </button>
+                {% endif %}
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="occasions-message info" style="grid-column:1 / -1;">
+              <p>No occasions found.</p>
+            </div>
+          {% endif %}
+
+          <!-- Change "add an occasion" button text to "Add" with plus icon -->
+          <div class="add-occasion-item">
+            <button class="add-occasion-btn" onclick="openModal{{ block.id }}('Add New Occasion')">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 8px;">
+                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+              </svg>
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="login-required">
+      <h5>Please log in to manage your occasions</h5>
+      <p><a href="{{ routes.account_login_url }}">Log in to your account</a></p>
+    </div>
+  {% endif %}
+</div>
+
+{% stylesheet %}
+/* Container */
+.occasions-manager{max-width:800px;margin:0 auto}
+
+/* ===== Modal: styles work before AND after portal ===== */
+.occasions-manager .modal-overlay,
+.occasions-modal-overlay{
+  position:fixed;
+  inset:0;
+  background:var(--color-overlay, rgba(0,0,0,.5));
+  z-index:2147483647; /* above sticky headers/footers */
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+
+.occasions-manager .modal-content,
+.occasions-modal-overlay .modal-content{
+  background:var(--color-background);
+  color:var(--color-foreground);
+  border-radius:var(--style-border-radius-card, 12px);
+  max-width:520px;width:100%;
+  max-height:90vh;overflow-y:auto;
+  box-shadow:var(--shadow-card, 0 20px 40px rgba(0,0,0,.15));
+}
+
+/* Fixed h3 header styling to use proper theme typography */
+.occasions-manager .modal-header,
+.occasions-modal-overlay .modal-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:28px 28px 20px;
+  border-bottom:1px solid var(--color-border);
+  margin-bottom:0;
+}
+
+.occasions-manager .modal-title,
+.occasions-modal-overlay .modal-title{
+  margin:0;
+  color:var(--color-foreground);
+  /* Using exact h3 theme font family and typography variables */
+  font-family:var(--font-family-heading);
+  font-size:var(--font-size-h3);
+  font-weight:var(--font-weight-h3);
+  line-height:var(--line-height-h3);
+  letter-spacing:var(--letter-spacing-h3);
+}
+
+/* Refined close button styling */
+.occasions-manager .modal-close,
+.occasions-modal-overlay .modal-close{
+  background:transparent;
+  border:1px solid var(--color-border);
+  border-radius:var(--style-border-radius-button, 6px);
+  cursor:pointer;
+  color:var(--color-foreground-secondary, #666);
+  padding:6px;width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s ease;
+}
+.occasions-manager .modal-close:hover,
+.occasions-modal-overlay .modal-close:hover{
+  background:var(--color-background-secondary, #f8f9fa);
+  color:var(--color-foreground);
+  border-color:var(--color-foreground-secondary, #999);
+}
+
+/* Enhanced modal body with refined spacing */
+.occasions-manager .modal-body,
+.occasions-modal-overlay .modal-body{padding:28px}
+
+/* Refined customer greeting styling */
+.occasions-manager .customer-info,
+.occasions-modal-overlay .customer-info{
+  background:var(--color-background-secondary, #f8f9fa);
+  border:1px solid var(--color-border);
+  border-radius:var(--style-border-radius-input, 6px);
+  padding:12px 16px;
+  margin:0 0 24px 0;
+  font-size:0.875rem;
+  color:var(--color-foreground-secondary, #666);
+  text-align:center;
+  font-weight:var(--font-weight-medium, 500);
+}
+
+/* Enhanced form styling with better spacing */
+.occasions-manager .form-content{margin-top:0}
+
+.occasions-manager .form-group{margin-bottom:20px}
+.occasions-manager .form-group:last-of-type{margin-bottom:24px}
+
+.occasions-manager .form-group label{
+  display:block;margin-bottom:8px;
+  font-weight:var(--font-weight-medium, 500);
+  color:var(--color-foreground);
+  font-size:0.9rem;
+}
+
+/* Completely redesigned form inputs with proper theme styling */
+.occasions-manager .form-group input,
+.occasions-manager .form-group select{
+  width:100%;
+  padding:14px 16px;
+  border:2px solid var(--color-border);
+  background:var(--color-background);
+  color:var(--color-foreground);
+  border-radius:var(--style-border-radius-input, 8px);
+  font-size:1rem;
+  font-family:var(--font-family-body, inherit);
+  transition:all 0.2s ease;
+  appearance:none;
+  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+}
+
+.occasions-manager .form-group input:focus,
+.occasions-manager .form-group select:focus{
+  border-color:var(--color-primary, #3b82f6);
+  outline:none;
+  box-shadow:0 0 0 3px var(--color-primary-background, rgba(59, 130, 246, 0.1)), 0 1px 3px rgba(0,0,0,0.1);
+  transform:translateY(-1px);
+}
+
+/* Enhanced select dropdown styling */
+.occasions-manager .form-group select{
+  background-image:url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position:right 16px center;
+  background-repeat:no-repeat;
+  background-size:16px;
+  padding-right:48px;
+}
+
+/* Enhanced placeholder styling */
+.occasions-manager .form-group input::placeholder{
+  color:var(--color-foreground-secondary, #9ca3af);
+  opacity:0.8;
+}
+
+/* Fixed modal actions and button styling to prevent text wrapping */
+.occasions-manager .modal-actions{
+  display:flex;gap:12px;margin-top:28px;
+  padding-top:24px;
+  border-top:1px solid var(--color-border);
+  flex-wrap:wrap;
+}
+
+/* Fixed primary button to prevent text wrapping and look professional */
+.occasions-manager .button{
+  --button-color:var(--color-primary-button-text);
+  --button-background-color:var(--color-primary-button-background);
+  --button-border-color:var(--color-primary-button-border);
+  --button-border-width:var(--style-border-width-primary);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
+  text-align:center;
+  color:var(--button-color);
+  background-color:var(--button-background-color);
+  border:none;
+  box-shadow:inset 0 0 0 var(--button-border-width) var(--button-border-color);
+  padding:14px 28px;
+  border-radius:var(--style-border-radius-buttons-primary, 8px);
+  cursor:pointer;
+  font-family:var(--button-font-family-primary);
+  font-weight:var(--button-font-weight-primary, 600);
+  text-transform:var(--button-text-case-primary);
+  font-size:1rem;
+  transition:all 0.2s ease;
+  min-height:48px;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.occasions-manager .button:hover{
+  --button-color:var(--color-primary-button-hover-text);
+  --button-background-color:var(--color-primary-button-hover-background);
+  --button-border-color:var(--color-primary-button-hover-border);
+  transform:translateY(-1px);
+  box-shadow:inset 0 0 0 var(--button-border-width) var(--button-border-color), 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Use theme danger button colors instead of hardcoded */
+.occasions-manager .button-danger{
+  background:var(--color-error, #dc3545);
+  color:var(--color-background);
+  margin-left:0;
+}
+.occasions-manager .button-danger:hover{
+  background:var(--color-error-hover, #c82333);
+}
+
+.occasions-manager .occasions-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+
+.occasions-manager .occasion-item{
+  border:1px solid var(--color-border);
+  background:var(--color-background);
+  border-radius:var(--style-border-radius-card, 8px);
+  padding:16px;position:relative;
+}
+
+.occasions-manager .occasion-item .occasion-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+
+.occasions-manager .occasion-item .occasion-name{
+  font-weight:var(--font-weight-bold, 600);
+  font-size:16px;margin:0;
+  color:var(--color-foreground);
+}
+
+.occasions-manager .occasion-item .occasion-date{
+  color:var(--color-foreground-secondary, #666);
+  font-size:14px;margin:4px 0 12px 0;
+}
+
+.occasions-manager .occasion-item .edit-btn{
+  background:none;
+  border:1px solid var(--color-border);
+  border-radius:var(--style-border-radius-button, 4px);
+  padding:4px 8px;cursor:pointer;font-size:12px;
+  color:var(--color-foreground-secondary, #666);
+}
+.occasions-manager .occasion-item .edit-btn:hover{
+  background:var(--color-background-secondary, #f5f5f5);
+}
+
+/* Gift button uses primary theme button look */
+.occasions-manager .occasion-item .gift-btn{width:100%;padding:12px;border:none;border-radius:var(--style-border-radius-buttons-primary);cursor:pointer;font-weight:var(--button-font-weight-primary);font-family:var(--button-font-family-primary);color:var(--color-primary-button-text);background-color:var(--color-primary-button-background);transition:color var(--animation-speed) var(--animation-easing),background-color var(--animation-speed) var(--animation-easing)}
+.occasions-manager .occasion-item .gift-btn:hover{color:var(--color-primary-button-hover-text);background-color:var(--color-primary-button-hover-background)}
+
+/* Add occasion button -> secondary look */
+.occasions-manager .add-occasion-item{
+  border:2px dashed var(--color-border);
+  border-radius:var(--style-border-radius-card, 8px);
+  padding:32px;text-align:center;display:flex;align-items:center;justify-content:center;
+}
+
+.occasions-manager .add-occasion-btn{
+  --button-color: var(--color-secondary-button-text);
+  --button-background-color: var(--color-secondary-button-background);
+  --button-border-color: var(--color-secondary-button-border);
+  --button-border-width: var(--style-border-width-secondary);
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  text-align: center;
+  color: var(--button-color);
+  background-color: var(--button-background-color);
+  border: none;
+  box-shadow: inset 0 0 0 var(--button-border-width) var(--button-border-color);
+  padding: var(--button-padding-block, 12px) var(--button-padding-inline, 24px);
+  border-radius: var(--style-border-radius-buttons-secondary);
+  cursor: pointer;
+  font-family: var(--button-font-family-secondary);
+  font-weight: var(--button-font-weight-secondary);
+  text-transform: var(--button-text-case-secondary);
+  transition: color var(--animation-speed) var(--animation-easing),
+    box-shadow var(--animation-speed) var(--animation-easing),
+    background-color var(--animation-speed) var(--animation-easing);
+}
+
+.occasions-manager .add-occasion-btn:hover{
+  --button-color: var(--color-secondary-button-hover-text);
+  --button-background-color: var(--color-secondary-button-hover-background);
+  --button-border-color: var(--color-secondary-button-hover-border);
+}
+
+/* Use theme colors for form messages */
+.occasions-manager .form-message,
+.occasions-manager .occasions-message{
+  margin-top:20px;padding:16px 20px;
+  border-radius:var(--style-border-radius-card, 8px);
+  text-align:center;
+  font-size:0.95rem;
+}
+
+.occasions-manager .form-message.success,
+.occasions-manager .occasions-message.success{
+  background:var(--color-success-background, #d4edda);
+  color:var(--color-success-text, #155724);
+  border:1px solid var(--color-success-border, #c3e6cb);
+}
+
+.occasions-manager .form-message.error,
+.occasions-manager .occasions-message.error{
+  background:var(--color-error-background, #f8d7da);
+  color:var(--color-error-text, #721c24);
+  border:1px solid var(--color-error-border, #f5c6cb);
+}
+
+@media (max-width:600px){.occasions-manager .occasions-grid{grid-template-columns:1fr}}
+{% endstylesheet %}
+
+{% javascript %}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-block="occasions-manager"]').forEach((root) => {
+    const configScript = root.querySelector('[data-occasions-config]');
+    const config = configScript ? JSON.parse(configScript.textContent) : {};
+    const blockId = config.blockId;
+
+    console.log('[v0] Block ID:', blockId);
+    console.log('[v0] Config:', config);
+
+    const form = root.querySelector('form');
+    const formMessageDiv = root.querySelector('.form-message');
+    const endpoint = (root.dataset.apiUrl || '').trim();
+
+    const modalOverlay = root.querySelector('.modal-overlay');
+    const modalTitle = root.querySelector('.modal-title');
+
+    if (!form || !config.customerId) return;
+
+    const submitBtn = form.querySelector('.submit-btn');
+    const occasionTypeSelect = form.querySelector('.occasion-type');
+    const otherOccasionGroup = form.querySelector('.other-occasion-group');
+    const requiredFields = form.querySelectorAll('[required]');
+
+    // Function to validate form and enable/disable submit button
+    function validateForm() {
+      let isValid = true;
+      
+      // Check all required fields
+      requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+          isValid = false;
+        }
+      });
+
+      // If "Other" is selected, check if other_occasion field has value
+      if (occasionTypeSelect.value === 'Other') {
+        const otherOccasionInput = form.querySelector('.other-occasion');
+        if (!otherOccasionInput.value.trim()) {
+          isValid = false;
+        }
+      }
+
+      submitBtn.disabled = !isValid;
+    }
+
+    // Show/hide other occasion field based on dropdown selection
+    function toggleOtherOccasionField() {
+      if (occasionTypeSelect.value === 'Other') {
+        otherOccasionGroup.hidden = false;
+        form.querySelector('.other-occasion').required = true;
+      } else {
+        otherOccasionGroup.hidden = true;
+        form.querySelector('.other-occasion').required = false;
+        form.querySelector('.other-occasion').value = '';
+      }
+      validateForm();
+    }
+
+    // Add event listeners for form validation
+    requiredFields.forEach(field => {
+      field.addEventListener('input', validateForm);
+      field.addEventListener('change', validateForm);
+    });
+
+    // Add event listener for other occasion field
+    form.querySelector('.other-occasion').addEventListener('input', validateForm);
+
+    // Add event listener for occasion type dropdown
+    occasionTypeSelect.addEventListener('change', toggleOtherOccasionField);
+
+    // Initial validation
+    validateForm();
+
+    // Move overlay to <body> to avoid theme stacking contexts
+    function portalize() {
+      if (!modalOverlay.dataset.portalized) {
+        document.body.appendChild(modalOverlay);
+        modalOverlay.dataset.portalized = '1';
+        modalOverlay.classList.add('occasions-modal-overlay');
+      }
+    }
+
+    window[`openModal${blockId}`] = function(title = config.buttonLabel || 'Add Occasion') {
+      portalize();
+      modalTitle.textContent = title;
+      modalOverlay.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      validateForm();
+    };
+
+    window[`closeModal${blockId}`] = function() {
+      modalOverlay.style.display = 'none';
+      document.body.style.overflow = '';
+      clearFormToCreateMode();
+    };
+
+    // window[`editOccasion${blockId}`] = function(id, date, occasionType, occasionName, otherOccasion) {
+    //   console.log('[v0] editOccasion called with:', { id, date, occasionType, occasionName, otherOccasion });
+    //   populateFormForEdit({ id, date, occasion_type: occasionType, occasion_name: occasionName, other_occasion: otherOccasion });
+    // };
+
+    window[`deleteOccasion${blockId}`] = function() {
+      const occasionIdInput = form.querySelector('.occasion-id');
+      if (!occasionIdInput.value || !confirm('Are you sure you want to delete this occasion?')) return;
+      handleDelete();
+    };
+
+    // Close on backdrop click / ESC
+    modalOverlay.onclick = function(e){ if (e.target === modalOverlay) window[`closeModal${blockId}`](); };
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modalOverlay.style.display==='flex') window[`closeModal${blockId}`](); });
+
+    function showFormMessage(type, text){
+      formMessageDiv.className = `form-message ${type}`;
+      formMessageDiv.textContent = text;
+      formMessageDiv.hidden = false;
+    }
+
+    function populateFormForEdit(o){
+      console.log('[v0] populateFormForEdit called with:', o);
+      
+      form.querySelector('.event-date').value = o.date;
+      form.querySelector('.occasion-type').value = o.occasion_type;
+      form.querySelector('.occasion-name').value = o.occasion_name;
+      form.querySelector('.occasion-id').value = o.id || '';
+
+      const otherGroup = form.querySelector('.other-occasion-group');
+      const otherInput = form.querySelector('.other-occasion');
+      if (o.occasion_type === 'Other' && o.other_occasion){ 
+        otherGroup.hidden = false; 
+        otherInput.value = o.other_occasion;
+        otherInput.required = true;
+      }
+
+      form.querySelector('.btn-text').textContent = 'Save';
+      form.querySelector('.delete-btn').hidden = false;
+
+      window[`openModal${blockId}`]('Edit Occasion');
+      toggleOtherOccasionField();
+      validateForm();
+    }
+
+    function clearFormToCreateMode(){
+      form.reset();
+      form.querySelector('.other-occasion-group').hidden = true;
+      form.querySelector('.other-occasion').required = false;
+      form.querySelector('.occasion-id').value = '';
+      form.querySelector('.btn-text').textContent = 'Add';
+      form.querySelector('.delete-btn').hidden = true;
+      formMessageDiv.hidden = true;
+      validateForm();
+    }
+
+    async function handleDelete(){
+      const deleteBtn = form.querySelector('.delete-btn');
+      const deleteText = deleteBtn.querySelector('.delete-text');
+      const deleteLoading = deleteBtn.querySelector('.delete-loading');
+      const occasionIdInput = form.querySelector('.occasion-id');
+
+      deleteBtn.disabled = true; deleteText.hidden = true; deleteLoading.hidden = false;
+
+      try{
+        const deleteEndpoint = endpoint.replace('/api/create-metaobject','/api/delete-metaobject');
+        const r = await fetch(deleteEndpoint,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ id: occasionIdInput.value, customer: config.customerId })
+        });
+        if(!r.ok){ const t = await r.text(); let j={}; try{ j=t?JSON.parse(t):{} }catch{}; throw new Error(j.error||t||`HTTP ${r.status}`); }
+        showFormMessage('success','Occasion deleted successfully! Please refresh the page to see changes.');
+        setTimeout(()=> window[`closeModal${blockId}`](), 2000);
+      }catch(err){
+        showFormMessage('error',`Delete failed: ${err.message}`);
+      }finally{
+        deleteBtn.disabled = false; deleteText.hidden = false; deleteLoading.hidden = true;
+      }
+    }
+
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const submitBtn = form.querySelector('.submit-btn');
+      const btnText = submitBtn.querySelector('.btn-text');
+      const btnLoading = submitBtn.querySelector('.btn-loading');
+
+      submitBtn.disabled = true; btnText.hidden = true; btnLoading.hidden = false; formMessageDiv.hidden = true;
+
+      const isEditing = !!form.querySelector('.occasion-id').value;
+      const payload = {
+        customer: config.customerId,
+        date: form.querySelector('.event-date').value,
+        occasion_type: form.querySelector('.occasion-type').value,
+        other_occasion: form.querySelector('.other-occasion').value,
+        occasion_name: form.querySelector('.occasion-name').value
+      };
+      if(isEditing) payload.id = form.querySelector('.occasion-id').value;
+
+      try{
+        const r = await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const t = await r.text(); let j={}; try{ j=t?JSON.parse(t):{} }catch{}
+        if(!r.ok) throw new Error(j.error||t||`HTTP ${r.status}`);
+        showFormMessage('success',`Event ${isEditing?'updated':'created'} successfully! Please refresh the page to see changes.`);
+        setTimeout(()=> window[`closeModal${blockId}`](), 2000);
+      }catch(err){
+        showFormMessage('error',`Error: ${err.message}`);
+      }finally{
+        submitBtn.disabled = false; btnText.hidden = false; btnLoading.hidden = true;
+      }
+    });
+
+    function attachEditHandlers() {
+      root.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          console.log('[v0] Edit button clicked');
+          const occasionData = {
+            id: this.dataset.occasionId,
+            date: this.dataset.occasionDate,
+            occasion_type: this.dataset.occasionType,
+            occasion_name: this.dataset.occasionName,
+            other_occasion: this.dataset.otherOccasion
+          };
+          console.log('[v0] Occasion data from attributes:', occasionData);
+          populateFormForEdit(occasionData);
+        });
+      });
+    }
+
+    attachEditHandlers();
+  });
+});
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "Occasions Manager",
+  "settings": [
+    { "type":"header","content":"Form Settings" },
+    { "type":"text","id":"form_heading","label":"Form Heading","default":"Create Customer Event" },
+    { "type":"text","id":"button_label","label":"Button Label","default":"Add" },
+    { "type":"header","content":"Display Settings" },
+    { "type":"text","id":"display_heading","label":"Display Heading","default":"Occasion Reminders" },
+    { "type":"header","content":"API Configuration" },
+    { "type":"text","id":"api_url","label":"API endpoint URL","default":"/api/create-metaobject" },
+    { "type":"header","content":"Gift URLs by Occasion Type" },
+    { "type":"url","id":"dads_birthday_url","label":"Dad's Birthday URL" },
+    { "type":"url","id":"mums_birthday_url","label":"Mum's Birthday URL" },
+    { "type":"url","id":"family_birthday_url","label":"Family Birthday URL" },
+    { "type":"url","id":"friends_birthday_url","label":"Friend's Birthday URL" },
+    { "type":"url","id":"anniversary_url","label":"Anniversary URL" },
+    { "type":"url","id":"mothers_day_url","label":"Mother's Day URL" },
+    { "type":"url","id":"fathers_day_url","label":"Father's Day URL" },
+    { "type":"url","id":"easter_url","label":"Easter URL" },
+    { "type":"url","id":"other_url","label":"Other Occasions URL" }
+  ]
+}
+{% endschema %}
