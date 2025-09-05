@@ -205,7 +205,11 @@ export async function POST(request: NextRequest) {
     if (result.errors) {
       console.error("[v0] GraphQL errors:", result.errors)
       return NextResponse.json(
-        { error: "GraphQL errors occurred" },
+        {
+          error: "GraphQL errors occurred",
+          details: result.errors.map((err: any) => err.message).join(", "),
+          graphqlErrors: result.errors,
+        },
         {
           status: 500,
           headers: {
