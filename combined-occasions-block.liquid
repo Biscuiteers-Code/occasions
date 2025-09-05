@@ -143,9 +143,10 @@
                     <h4 class="occasion-name">{{ occasion.occasion_name }}</h4>
                     <p class="occasion-date">{{ formatted_date }}</p>
                   </div>
-                  <button class="edit-btn"
+                  <!-- Added type="button" to prevent form submission behavior -->
+                  <button type="button" class="edit-btn"
                           data-occasion-id="{{ occasion.system.id | default: occasion.id | default: occasion.gid | default: occasion.handle | default: 'no-id' }}"
-                          data-occasion-date="{{ occasion.date }}"
+                          data-occasion-date="{{ occasion.date | date: '%Y-%m-%d' }}"
                           data-occasion-type="{{ occasion.occasion_type }}"
                           data-occasion-name="{{ occasion.occasion_name }}"
                           data-other-occasion="{{ occasion.other_occasion }}">⋯</button>
@@ -591,26 +592,35 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateFormForEdit(o){
       console.log('[v0] populateFormForEdit called with:', o);
       
-      form.querySelector('.event-date').value = o.date;
-      form.querySelector('.occasion-type').value = o.occasion_type;
-      form.querySelector('.occasion-name').value = o.occasion_name;
-      form.querySelector('.occasion-id').value = o.id || '';
-
+      const eventDate = form.querySelector('.event-date');
+      const occasionType = form.querySelector('.occasion-type');
+      const occasionName = form.querySelector('.occasion-name');
+      const occasionId = form.querySelector('.occasion-id');
       const debugDisplay = form.querySelector('.debug-id-display');
       const currentIdSpan = form.querySelector('.current-id');
-      debugDisplay.style.display = 'block';
-      currentIdSpan.textContent = o.id || 'no-id';
+      const btnText = form.querySelector('.btn-text');
+      const deleteBtn = form.querySelector('.delete-btn');
+      
+      if (eventDate) eventDate.value = o.date;
+      if (occasionType) occasionType.value = o.occasion_type;
+      if (occasionName) occasionName.value = o.occasion_name;
+      if (occasionId) occasionId.value = o.id || '';
+
+      if (debugDisplay && currentIdSpan) {
+        debugDisplay.style.display = 'block';
+        currentIdSpan.textContent = o.id || 'no-id';
+      }
 
       const otherGroup = form.querySelector('.other-occasion-group');
       const otherInput = form.querySelector('.other-occasion');
-      if (o.occasion_type === 'Other' && o.other_occasion){ 
+      if (otherGroup && otherInput && o.occasion_type === 'Other' && o.other_occasion){ 
         otherGroup.hidden = false; 
         otherInput.value = o.other_occasion;
         otherInput.required = true;
       }
 
-      form.querySelector('.btn-text').textContent = 'Save';
-      form.querySelector('.delete-btn').hidden = false;
+      if (btnText) btnText.textContent = 'Save';
+      if (deleteBtn) deleteBtn.hidden = false;
 
       window[`openModal${blockId}`]('Edit Occasion');
       toggleOtherOccasionField();
@@ -619,14 +629,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearFormToCreateMode(){
       form.reset();
-      form.querySelector('.other-occasion-group').hidden = true;
-      form.querySelector('.other-occasion').required = false;
-      form.querySelector('.occasion-id').value = '';
-      form.querySelector('.btn-text').textContent = 'Add';
-      form.querySelector('.delete-btn').hidden = true;
-      formMessageDiv.hidden = true;
       
-      form.querySelector('.debug-id-display').style.display = 'none';
+      const otherGroup = form.querySelector('.other-occasion-group');
+      const otherInput = form.querySelector('.other-occasion');
+      const occasionId = form.querySelector('.occasion-id');
+      const btnText = form.querySelector('.btn-text');
+      const deleteBtn = form.querySelector('.delete-btn');
+      const debugDisplay = form.querySelector('.debug-id-display');
+      
+      if (otherGroup) otherGroup.hidden = true;
+      if (otherInput) otherInput.required = false;
+      if (occasionId) occasionId.value = '';
+      if (btnText) btnText.textContent = 'Add';
+      if (deleteBtn) deleteBtn.hidden = true;
+      if (formMessageDiv) formMessageDiv.hidden = true;
+      if (debugDisplay) debugDisplay.style.display = 'none';
       
       validateForm();
     }
@@ -640,11 +657,15 @@ document.addEventListener('DOMContentLoaded', () => {
       deleteBtn.disabled = true; deleteText.hidden = true; deleteLoading.hidden = false;
 
       try{
-        const deleteEndpoint = endpoint.replace('/api/create-metaobject','/api/delete-metaobject');
+        const deleteEndpoint = endpoint.replace('/api/create-metaobject','/api/change-metaobject');
         const r = await fetch(deleteEndpoint,{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ id: occasionIdInput.value, customer: config.customerId })
+          body: JSON.stringify({ 
+            operation: 'delete',
+            id: occasionIdInput.value, 
+            customer: config.customerId 
+          })
         });
         if(!r.ok){ const t = await r.text(); let j={}; try{ j=t?JSON.parse(t):{} }catch{}; throw new Error(j.error||t||`HTTP ${r.status}`); }
         showFormMessage('success','Occasion deleted successfully! Please refresh the page to see changes.');
@@ -688,20 +709,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function attachEditHandlers() {
-      root.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-          console.log('[v0] Edit button clicked');
-          const occasionData = {
-            id: this.dataset.occasionId,
-            date: this.dataset.occasionDate,
-            occasion_type: this.dataset.occasionType,
-            occasion_name: this.dataset.occasionName,
-            other_occasion: this.dataset.otherOccasion
-          };
-          console.log('[v0] Occasion data from attributes:', occasionData);
-          populateFormForEdit(occasionData);
+      // Remove old approach and use event delegation from the occasions grid
+      const occasionsGrid = root.querySelector('.occasions-grid');
+      if (occasionsGrid) {
+        occasionsGrid.addEventListener('click', function(e) {
+          const editBtn = e.target.closest('.edit-btn');
+          if (editBtn) {
+            console.log('[v0] Edit button clicked');
+            const occasionData = {
+              id: editBtn.dataset.occasionId,
+              date: editBtn.dataset.occasionDate,
+              occasion_type: editBtn.dataset.occasionType,
+              occasion_name: editBtn.dataset.occasionName,
+              other_occasion: editBtn.dataset.otherOccasion
+            };
+            console.log('[v0] Occasion data from attributes:', occasionData);
+            populateFormForEdit(occasionData);
+          }
         });
-      });
+      }
     }
 
     attachEditHandlers();

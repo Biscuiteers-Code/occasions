@@ -267,6 +267,120 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Successfully ${isUpdate ? "updated" : "created"} metaobject:`, metaobject.id)
 
+    if (!isUpdate) {
+      try {
+        console.log("[v0] Adding metaobject to customer's my_occasions list")
+
+        // First, get the current customer metafield value
+        const customerMetafieldQuery = `
+          query getCustomerMetafield($customerId: ID!) {
+            customer(id: $customerId) {
+              metafield(namespace: "custom", key: "my_occasions") {
+                id
+                value
+              }
+            }
+          }
+        `
+
+        const customerGid = eventData.customer.startsWith("gid://")
+          ? eventData.customer
+          : `gid://shopify/Customer/${eventData.customer}`
+
+        const metafieldResponse = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+            "User-Agent": "Shopify-Metaobject-App/1.0",
+          },
+          body: JSON.stringify({
+            query: customerMetafieldQuery,
+            variables: { customerId: customerGid },
+          }),
+        })
+
+        const metafieldResult = await metafieldResponse.json()
+        console.log("[v0] Customer metafield query result:", JSON.stringify(metafieldResult, null, 2))
+
+        // Parse existing occasions list or create empty array
+        let existingOccasions = []
+        const currentMetafield = metafieldResult.data?.customer?.metafield
+
+        if (currentMetafield?.value) {
+          try {
+            existingOccasions = JSON.parse(currentMetafield.value)
+            if (!Array.isArray(existingOccasions)) {
+              existingOccasions = []
+            }
+          } catch (parseError) {
+            console.log("[v0] Could not parse existing metafield value, starting with empty array")
+            existingOccasions = []
+          }
+        }
+
+        // Add the new metaobject ID to the list
+        existingOccasions.push(metaobject.id)
+        console.log("[v0] Updated occasions list:", existingOccasions)
+
+        // Update the customer metafield with the combined list
+        const updateMetafieldMutation = `
+          mutation customerUpdate($input: CustomerInput!) {
+            customerUpdate(input: $input) {
+              customer {
+                id
+                metafield(namespace: "custom", key: "my_occasions") {
+                  id
+                  value
+                }
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `
+
+        const updateResponse = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+            "User-Agent": "Shopify-Metaobject-App/1.0",
+          },
+          body: JSON.stringify({
+            query: updateMetafieldMutation,
+            variables: {
+              input: {
+                id: customerGid,
+                metafields: [
+                  {
+                    namespace: "custom",
+                    key: "my_occasions",
+                    value: JSON.stringify(existingOccasions),
+                    type: "list.metaobject_reference",
+                  },
+                ],
+              },
+            },
+          }),
+        })
+
+        const updateResult = await updateResponse.json()
+        console.log("[v0] Customer metafield update result:", JSON.stringify(updateResult, null, 2))
+
+        if (updateResult.data?.customerUpdate?.userErrors?.length > 0) {
+          console.error("[v0] Customer metafield update errors:", updateResult.data.customerUpdate.userErrors)
+        } else {
+          console.log("[v0] Successfully added metaobject to customer's occasions list")
+        }
+      } catch (metafieldError) {
+        console.error("[v0] Error updating customer metafield:", metafieldError)
+        // Don't fail the whole request if metafield update fails
+      }
+    }
+
     return NextResponse.json(
       {
         success: true,
