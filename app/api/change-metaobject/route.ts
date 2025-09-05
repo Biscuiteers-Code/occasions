@@ -143,6 +143,187 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    try {
+      const customerGid = customer.startsWith("gid://") ? customer : `gid://shopify/Customer/${customer}`
+
+      if (operation === "delete") {
+        // Get current occasions list and remove the deleted metaobject
+        const getMetafieldQuery = `
+          query getCustomerMetafield($customerId: ID!) {
+            customer(id: $customerId) {
+              metafield(namespace: "custom", key: "my_occasions") {
+                id
+                value
+              }
+            }
+          }
+        `
+
+        const metafieldResponse = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+            "User-Agent": "v0-shopify-app/1.0",
+          },
+          body: JSON.stringify({
+            query: getMetafieldQuery,
+            variables: { customerId: customerGid },
+          }),
+        })
+
+        const metafieldResult = await metafieldResponse.json()
+        let existingOccasions = []
+
+        if (metafieldResult.data?.customer?.metafield?.value) {
+          try {
+            existingOccasions = JSON.parse(metafieldResult.data.customer.metafield.value)
+            if (!Array.isArray(existingOccasions)) {
+              existingOccasions = []
+            }
+          } catch (parseError) {
+            existingOccasions = []
+          }
+        }
+
+        // Remove the deleted metaobject ID from the list
+        const deletedGid = `gid://shopify/Metaobject/${id}`
+        existingOccasions = existingOccasions.filter((occasionId) => occasionId !== deletedGid)
+
+        // Update both my_occasions and no_occasions metafields
+        const updateMetafieldMutation = `
+          mutation customerUpdate($input: CustomerInput!) {
+            customerUpdate(input: $input) {
+              customer {
+                id
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `
+
+        await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+            "User-Agent": "v0-shopify-app/1.0",
+          },
+          body: JSON.stringify({
+            query: updateMetafieldMutation,
+            variables: {
+              input: {
+                id: customerGid,
+                metafields: [
+                  {
+                    namespace: "custom",
+                    key: "my_occasions",
+                    value: JSON.stringify(existingOccasions),
+                    type: "list.metaobject_reference",
+                  },
+                  {
+                    namespace: "custom",
+                    key: "no_occasions",
+                    value: existingOccasions.length.toString(),
+                    type: "single_line_text_field",
+                  },
+                ],
+              },
+            },
+          }),
+        })
+
+        console.log("[v0] Updated customer metafields after delete, new count:", existingOccasions.length)
+      } else {
+        // For updates, just update the count (occasions list doesn't change)
+        const getMetafieldQuery = `
+          query getCustomerMetafield($customerId: ID!) {
+            customer(id: $customerId) {
+              metafield(namespace: "custom", key: "my_occasions") {
+                id
+                value
+              }
+            }
+          }
+        `
+
+        const metafieldResponse = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+            "User-Agent": "v0-shopify-app/1.0",
+          },
+          body: JSON.stringify({
+            query: getMetafieldQuery,
+            variables: { customerId: customerGid },
+          }),
+        })
+
+        const metafieldResult = await metafieldResponse.json()
+        let occasionsCount = 0
+
+        if (metafieldResult.data?.customer?.metafield?.value) {
+          try {
+            const existingOccasions = JSON.parse(metafieldResult.data.customer.metafield.value)
+            if (Array.isArray(existingOccasions)) {
+              occasionsCount = existingOccasions.length
+            }
+          } catch (parseError) {
+            occasionsCount = 0
+          }
+        }
+
+        // Update no_occasions count
+        const updateCountMutation = `
+          mutation customerUpdate($input: CustomerInput!) {
+            customerUpdate(input: $input) {
+              customer {
+                id
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `
+
+        await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+            "User-Agent": "v0-shopify-app/1.0",
+          },
+          body: JSON.stringify({
+            query: updateCountMutation,
+            variables: {
+              input: {
+                id: customerGid,
+                metafields: [
+                  {
+                    namespace: "custom",
+                    key: "no_occasions",
+                    value: occasionsCount.toString(),
+                    type: "single_line_text_field",
+                  },
+                ],
+              },
+            },
+          }),
+        })
+
+        console.log("[v0] Updated customer no_occasions count after update:", occasionsCount)
+      }
+    } catch (metafieldError) {
+      console.error("[v0] Error updating customer metafields:", metafieldError)
+      // Don't fail the whole request if metafield update fails
+    }
+
     if (operation === "delete") {
       const deleteResult = responseData.data?.metaobjectDelete
       if (deleteResult?.userErrors && deleteResult.userErrors.length > 0) {

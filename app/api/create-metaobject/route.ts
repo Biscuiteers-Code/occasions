@@ -267,6 +267,119 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Successfully ${isUpdate ? "updated" : "created"} metaobject:`, metaobject.id)
 
+    try {
+      console.log("[v0] Syncing customer occasion count")
+
+      const customerGid = eventData.customer.startsWith("gid://")
+        ? eventData.customer
+        : `gid://shopify/Customer/${eventData.customer}`
+
+      // Get both metafields to compare counts
+      const syncQuery = `
+        query getCustomerMetafields($customerId: ID!) {
+          customer(id: $customerId) {
+            myOccasions: metafield(namespace: "custom", key: "my_occasions") {
+              id
+              value
+            }
+            noOccasions: metafield(namespace: "custom", key: "no_occasions") {
+              id
+              value
+            }
+          }
+        }
+      `
+
+      const syncResponse = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": accessToken,
+          "User-Agent": "Shopify-Metaobject-App/1.0",
+        },
+        body: JSON.stringify({
+          query: syncQuery,
+          variables: { customerId: customerGid },
+        }),
+      })
+
+      const syncResult = await syncResponse.json()
+      const customer = syncResult.data?.customer
+
+      let actualCount = 0
+      let storedCount = 0
+
+      // Count actual occasions in the list
+      if (customer?.myOccasions?.value) {
+        try {
+          const occasionsList = JSON.parse(customer.myOccasions.value)
+          if (Array.isArray(occasionsList)) {
+            actualCount = occasionsList.length
+          }
+        } catch (parseError) {
+          console.log("[v0] Could not parse occasions list for sync")
+        }
+      }
+
+      // Get stored count
+      if (customer?.noOccasions?.value) {
+        storedCount = Number.parseInt(customer.noOccasions.value) || 0
+      }
+
+      console.log("[v0] Count sync - Actual:", actualCount, "Stored:", storedCount)
+
+      // Update count if they don't match
+      if (actualCount !== storedCount) {
+        console.log("[v0] Counts don't match, updating no_occasions to:", actualCount)
+
+        const syncCountMutation = `
+          mutation customerUpdate($input: CustomerInput!) {
+            customerUpdate(input: $input) {
+              customer {
+                id
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `
+
+        await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+            "User-Agent": "Shopify-Metaobject-App/1.0",
+          },
+          body: JSON.stringify({
+            query: syncCountMutation,
+            variables: {
+              input: {
+                id: customerGid,
+                metafields: [
+                  {
+                    namespace: "custom",
+                    key: "no_occasions",
+                    value: actualCount.toString(),
+                    type: "single_line_text_field",
+                  },
+                ],
+              },
+            },
+          }),
+        })
+
+        console.log("[v0] Successfully synced no_occasions count to:", actualCount)
+      } else {
+        console.log("[v0] Counts already match, no sync needed")
+      }
+    } catch (syncError) {
+      console.error("[v0] Error syncing occasion count:", syncError)
+      // Don't fail the whole request if sync fails
+    }
+
     if (!isUpdate) {
       try {
         console.log("[v0] Adding metaobject to customer's my_occasions list")
