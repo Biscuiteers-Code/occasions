@@ -6,6 +6,7 @@ import { type NextRequest, NextResponse } from "next/server"
 // STORE_DOMAIN - Your Shopify store domain (e.g., your-store)
 
 interface CustomerEventData {
+  id?: string // Added optional id field for updates
   customer: string
   date: string
   occasion_type: string
@@ -44,53 +45,104 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Using store domain from env var:", apiUrl)
     console.log("[v0] Access token length:", accessToken.length)
 
-    const graphqlMutation = `
-      mutation metaobjectCreate($metaobject: MetaobjectCreateInput!) {
-        metaobjectCreate(metaobject: $metaobject) {
-          metaobject {
-            id
-            handle
-            type
-            fields {
-              key
-              value
+    const isUpdate = !!eventData.id
+    console.log("[v0] Operation type:", isUpdate ? "UPDATE" : "CREATE")
+
+    const graphqlMutation = isUpdate
+      ? `
+        mutation metaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+          metaobjectUpdate(id: $id, metaobject: $metaobject) {
+            metaobject {
+              id
+              handle
+              type
+              fields {
+                key
+                value
+              }
+            }
+            userErrors {
+              field
+              message
             }
           }
-          userErrors {
-            field
-            message
+        }
+      `
+      : `
+        mutation metaobjectCreate($metaobject: MetaobjectCreateInput!) {
+          metaobjectCreate(metaobject: $metaobject) {
+            metaobject {
+              id
+              handle
+              type
+              fields {
+                key
+                value
+              }
+            }
+            userErrors {
+              field
+              message
+            }
           }
         }
-      }
-    `
+      `
 
-    const variables = {
-      metaobject: {
-        type: "customer_event",
-        fields: [
-          {
-            key: "customer",
-            value: eventData.customer,
+    const variables = isUpdate
+      ? {
+          id: eventData.id,
+          metaobject: {
+            fields: [
+              {
+                key: "customer",
+                value: eventData.customer,
+              },
+              {
+                key: "date",
+                value: eventData.date,
+              },
+              {
+                key: "occasion_type",
+                value: eventData.occasion_type,
+              },
+              {
+                key: "other_occasion",
+                value: eventData.other_occasion || "",
+              },
+              {
+                key: "occasion_name",
+                value: eventData.occasion_name,
+              },
+            ],
           },
-          {
-            key: "date",
-            value: eventData.date,
+        }
+      : {
+          metaobject: {
+            type: "customer_event",
+            fields: [
+              {
+                key: "customer",
+                value: eventData.customer,
+              },
+              {
+                key: "date",
+                value: eventData.date,
+              },
+              {
+                key: "occasion_type",
+                value: eventData.occasion_type,
+              },
+              {
+                key: "other_occasion",
+                value: eventData.other_occasion || "",
+              },
+              {
+                key: "occasion_name",
+                value: eventData.occasion_name,
+              },
+            ],
           },
-          {
-            key: "occasion_type",
-            value: eventData.occasion_type,
-          },
-          {
-            key: "other_occasion",
-            value: eventData.other_occasion || "",
-          },
-          {
-            key: "occasion_name",
-            value: eventData.occasion_name,
-          },
-        ],
-      },
-    }
+        }
 
     console.log("[v0] Making GraphQL request to Shopify")
     console.log("[v0] Request payload:", JSON.stringify({ query: graphqlMutation, variables }, null, 2))
@@ -165,8 +217,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (result.data?.metaobjectCreate?.userErrors?.length > 0) {
-      const userErrors = result.data.metaobjectCreate.userErrors
+    const operation = isUpdate ? "metaobjectUpdate" : "metaobjectCreate"
+    const operationResult = result.data?.[operation]
+
+    if (operationResult?.userErrors?.length > 0) {
+      const userErrors = operationResult.userErrors
       console.error("[v0] User errors:", userErrors)
       return NextResponse.json(
         {
@@ -183,12 +238,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const metaobject = result.data?.metaobjectCreate?.metaobject
+    const metaobject = operationResult?.metaobject
 
     if (!metaobject) {
-      console.error("[v0] No metaobject returned from Shopify")
+      console.error(`[v0] No metaobject returned from Shopify ${operation}`)
       return NextResponse.json(
-        { error: "Failed to create metaobject" },
+        { error: `Failed to ${isUpdate ? "update" : "create"} metaobject` },
         {
           status: 500,
           headers: {
@@ -200,12 +255,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log("[v0] Successfully created metaobject:", metaobject.id)
+    console.log(`[v0] Successfully ${isUpdate ? "updated" : "created"} metaobject:`, metaobject.id)
 
     return NextResponse.json(
       {
         success: true,
         metaobject: metaobject,
+        operation: isUpdate ? "updated" : "created", // Include operation type in response
       },
       {
         headers: {
