@@ -113,7 +113,7 @@
         <!-- Updated customer greeting to summary page under heading -->
         <div class="customer-greeting-summary">
           <p class="customer-info">
-            {% assign no_occasions = customer.metafields.custom.my_occasions.value.size | default: 0 %}
+            {% assign no_occasions = customer.metafields.custom.no_occasions.value | default: 0 %}
             {% assign target_occasions = block.settings.pressie_points_target | default: 3 %}
             {% assign points_value = block.settings.pressie_points_value | default: 5 %}
             {% if no_occasions == 0 %}
