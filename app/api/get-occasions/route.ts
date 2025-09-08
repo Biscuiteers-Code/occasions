@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
         id: metaobject.id,
         handle: metaobject.handle,
         occasion_name: fields.occasion_name || "",
-        occasion_type: fields.occasion_type || "",
+        type: fields.type || "",
         date: fields.date || "",
         other_occasion: fields.other_occasion || "",
       }

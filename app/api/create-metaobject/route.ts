@@ -9,7 +9,7 @@ interface CustomerEventData {
   id?: string // Added optional id field for updates
   customer: string
   date: string
-  occasion_type: string
+  type: string // Changed from occasion_type to type to match new custom.type field
   other_occasion?: string
   occasion_name: string
 }
@@ -18,11 +18,8 @@ export async function POST(request: NextRequest) {
   try {
     const eventData: CustomerEventData = await request.json()
 
-    if (!eventData.customer || !eventData.date || !eventData.occasion_type || !eventData.occasion_name) {
-      return NextResponse.json(
-        { error: "Customer, date, occasion type, and occasion name are required" },
-        { status: 400 },
-      )
+    if (!eventData.customer || !eventData.date || !eventData.type || !eventData.occasion_name) {
+      return NextResponse.json({ error: "Customer, date, type, and occasion name are required" }, { status: 400 })
     }
 
     const shopifyUrl = process.env.SHOPIFY_STORE_URL
@@ -108,8 +105,8 @@ export async function POST(request: NextRequest) {
                 value: eventData.date,
               },
               {
-                key: "occasion_type",
-                value: eventData.occasion_type,
+                key: "type",
+                value: eventData.type,
               },
               {
                 key: "other_occasion",
@@ -135,8 +132,8 @@ export async function POST(request: NextRequest) {
                 value: eventData.date,
               },
               {
-                key: "occasion_type",
-                value: eventData.occasion_type,
+                key: "type",
+                value: eventData.type,
               },
               {
                 key: "other_occasion",

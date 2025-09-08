@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("[v0] Request body:", JSON.stringify(body, null, 2))
 
-    const { id, customer, operation, date, occasion_type, occasion_name, other_occasion } = body
+    const { id, customer, operation, date, type, occasion_name, other_occasion } = body
 
     if (!id) {
       console.log("[v0] Missing occasion ID")
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         metaobject: {
           fields: [
             { key: "date", value: date },
-            { key: "occasion_type", value: occasion_type },
+            { key: "type", value: type },
             { key: "occasion_name", value: occasion_name },
             { key: "other_occasion", value: other_occasion || "" },
           ],
