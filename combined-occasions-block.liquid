@@ -114,8 +114,16 @@
         <div class="customer-greeting-summary">
           <p class="customer-info">
             {% assign no_occasions = customer.metafields.custom.no_occasions.value | default: 0 %}
+            {% assign actual_occasions_count = customer.metafields.custom.my_occasions.value.size | default: 0 %}
             {% assign target_occasions = block.settings.pressie_points_target | default: 3 %}
             {% assign points_value = block.settings.pressie_points_value | default: 5 %}
+            
+            <!-- Debug: no_occasions={{ no_occasions }}, actual_count={{ actual_occasions_count }} -->
+            
+            {% if no_occasions == 0 and actual_occasions_count > 0 %}
+              {% assign no_occasions = actual_occasions_count %}
+            {% endif %}
+            
             {% if no_occasions == 0 %}
               Hi {{ customer.first_name }}, add {{ target_occasions }} occasion reminders and earn {{ points_value }} Pressie Points.
             {% elsif no_occasions < target_occasions %}

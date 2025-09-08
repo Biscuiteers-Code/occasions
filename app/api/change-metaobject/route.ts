@@ -179,8 +179,7 @@ export async function POST(request: NextRequest) {
           try {
             const existingOccasions = JSON.parse(metafieldResult.data.customer.metafield.value)
             if (Array.isArray(existingOccasions)) {
-              // Count will automatically exclude the deleted metaobject since it's now invalid
-              occasionsCount = existingOccasions.length - 1 // Subtract 1 for the deleted occasion
+              occasionsCount = existingOccasions.length
             }
           } catch (parseError) {
             occasionsCount = 0
@@ -218,7 +217,7 @@ export async function POST(request: NextRequest) {
                   {
                     namespace: "custom",
                     key: "no_occasions",
-                    value: Math.max(0, occasionsCount).toString(),
+                    value: occasionsCount.toString(),
                     type: "number_integer",
                   },
                 ],
@@ -227,7 +226,7 @@ export async function POST(request: NextRequest) {
           }),
         })
 
-        console.log("[v0] Updated customer no_occasions count after delete:", Math.max(0, occasionsCount))
+        console.log("[v0] Updated customer no_occasions count after delete:", occasionsCount)
       } else {
         // For updates, just update the count (occasions list doesn't change)
         const getMetafieldQuery = `
