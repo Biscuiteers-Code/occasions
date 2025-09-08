@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       const customerGid = customer.startsWith("gid://") ? customer : `gid://shopify/Customer/${customer}`
 
       if (operation === "delete") {
-        // Get current occasions list and remove the deleted metaobject
+        // Get current occasions list to count valid occasions
         const getMetafieldQuery = `
           query getCustomerMetafield($customerId: ID!) {
             customer(id: $customerId) {
@@ -173,25 +173,22 @@ export async function POST(request: NextRequest) {
         })
 
         const metafieldResult = await metafieldResponse.json()
-        let existingOccasions = []
+        let occasionsCount = 0
 
         if (metafieldResult.data?.customer?.metafield?.value) {
           try {
-            existingOccasions = JSON.parse(metafieldResult.data.customer.metafield.value)
-            if (!Array.isArray(existingOccasions)) {
-              existingOccasions = []
+            const existingOccasions = JSON.parse(metafieldResult.data.customer.metafield.value)
+            if (Array.isArray(existingOccasions)) {
+              // Count will automatically exclude the deleted metaobject since it's now invalid
+              occasionsCount = existingOccasions.length - 1 // Subtract 1 for the deleted occasion
             }
           } catch (parseError) {
-            existingOccasions = []
+            occasionsCount = 0
           }
         }
 
-        // Remove the deleted metaobject ID from the list
-        const deletedGid = `gid://shopify/Metaobject/${id}`
-        existingOccasions = existingOccasions.filter((occasionId) => occasionId !== deletedGid)
-
-        // Update both my_occasions and no_occasions metafields
-        const updateMetafieldMutation = `
+        // Update no_occasions count only
+        const updateCountMutation = `
           mutation customerUpdate($input: CustomerInput!) {
             customerUpdate(input: $input) {
               customer {
@@ -213,21 +210,15 @@ export async function POST(request: NextRequest) {
             "User-Agent": "v0-shopify-app/1.0",
           },
           body: JSON.stringify({
-            query: updateMetafieldMutation,
+            query: updateCountMutation,
             variables: {
               input: {
                 id: customerGid,
                 metafields: [
                   {
                     namespace: "custom",
-                    key: "my_occasions",
-                    value: JSON.stringify(existingOccasions),
-                    type: "list.metaobject_reference",
-                  },
-                  {
-                    namespace: "custom",
                     key: "no_occasions",
-                    value: existingOccasions.length.toString(),
+                    value: Math.max(0, occasionsCount).toString(),
                     type: "single_line_text_field",
                   },
                 ],
@@ -236,7 +227,7 @@ export async function POST(request: NextRequest) {
           }),
         })
 
-        console.log("[v0] Updated customer metafields after delete, new count:", existingOccasions.length)
+        console.log("[v0] Updated customer no_occasions count after delete:", Math.max(0, occasionsCount))
       } else {
         // For updates, just update the count (occasions list doesn't change)
         const getMetafieldQuery = `

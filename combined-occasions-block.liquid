@@ -1,472 +1,1005 @@
-{% comment %} Occasions Manager - Clean Implementation {% endcomment %}
+{% comment %} Occasions Manager — BLOCK (with modal portal + high z-index) {% endcomment %}
+<div class="occasions-manager"
+     id="occasions-manager-{{ block.id }}"
+     data-api-url="{{ block.settings.api_url | escape }}"
+     data-block="occasions-manager">
 
-<div class="occasions-manager" id="occasions-manager-{{ block.id }}" data-api-url="{{ block.settings.api_url | escape }}">
+  {%- comment -%} Pass Liquid data to JS safely via JSON {%- endcomment -%}
+  <script type="application/json" data-occasions-config>
+    {
+      "customerId": {% if customer %}"gid://shopify/Customer/{{ customer.id }}"{% else %}null{% endif %},
+      "customerName": {% if customer %}"{{ customer.first_name }} {{ customer.last_name }}"{% else %}null{% endif %},
+      "blockId": "{{ block.id }}",
+      "buttonLabel": "{{ block.settings.button_label | escape }}",
+      "loginUrl": "{{ routes.account_login_url }}",
+      "defaultGiftUrl": "{{ block.settings.default_gift_url | escape }}"
+    }
+  </script>
+
+  <script>
+    window.occasionsData{{ block.id }} = {
+      "customerId": "{{ customer.id }}",
+      "apiUrl": "{{ block.settings.api_url | escape }}",
+      "defaultGiftUrl": "{{ block.settings.default_gift_url | escape }}"
+    };
+  </script>
 
   {% if customer %}
-    {%- comment -%} 1. OCCASION SUMMARY - Nicely formatted cards {%- endcomment -%}
-    <div class="occasions-card">
-      <h3>{{ block.settings.display_heading | default: "My Occasions" }}</h3>
-      
-      <div class="occasions-grid" id="occasions-grid-{{ block.id }}">
-        {% for occasion in customer.metafields.custom.my_occasions.value limit:10 %}
-          {% assign day = occasion.date | date: "%-d" %}
-          {% assign month = occasion.date | date: "%B" %}
-          {% assign formatted_date = day | append: ' ' | append: month %}
-          
-          <div class="occasion-item">
-            <div class="occasion-content">
-              <h4>{{ occasion.occasion_name }}</h4>
-              <p class="occasion-date">{{ formatted_date }}</p>
-              <!-- Added type display back to show occasion type -->
-              {% if occasion.type %}
-                <p class="occasion-type">{{ occasion.type }}</p>
-              {% endif %}
+    <!-- Modal overlay (note the global class for styling after portal) -->
+    <div class="modal-overlay occasions-modal-overlay" id="modal-overlay-{{ block.id }}" style="display:none;">
+      <div class="modal-content" onclick="event.stopPropagation();">
+        <div class="modal-header">
+          <!-- Changed h5 to h3 for form heading -->
+          <h3 class="modal-title">Add Occasion Reminder</h3>
+          <!-- Replace &times; with close icon SVG -->
+          <button class="modal-close" type="button" onclick="closeModal{{ block.id }}()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M12.854 3.146a.5.5 0 0 0-.708 0L8 7.293 3.854 3.146a.5.5 0 1 0-.708.708L7.293 8l-4.147 4.146a.5.5 0 0 0 .708.708L8.707 8l4.147-4.146a.5.5 0 0 0 0-.708z"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Dynamic Pressie Points message that will be updated via JavaScript -->
+          <form class="form-content" novalidate id="edit-form-{{ block.id }}">
+            <input type="hidden" class="customer-gid" value="gid://shopify/Customer/{{ customer.id }}" />
+            <input type="hidden" class="occasion-id" value="" id="edit-occasion-id" />
+
+            <div class="form-group">
+              <label>Date *</label>
+              <input type="date" class="event-date" required id="edit-event-date" />
             </div>
-            
-            <button type="button" class="edit-btn" 
-                    data-occasion-id="{{ occasion.id }}"
-                    data-occasion-date="{{ occasion.date | date: '%Y-%m-%d' }}"
-                    data-occasion-name="{{ occasion.occasion_name }}"
-                    data-occasion-type="{{ occasion.type }}">
-              ⋯
-            </button>
-            
-            <!-- Updated gift URL logic to match occasion type with settings -->
-            {% assign gift_url = block.settings.default_gift_url %}
-            {% if occasion.type == block.settings.occasion_type_1 %}
-              {% assign gift_url = block.settings.gift_url_1 %}
-            {% elsif occasion.type == block.settings.occasion_type_2 %}
-              {% assign gift_url = block.settings.gift_url_2 %}
-            {% elsif occasion.type == block.settings.occasion_type_3 %}
-              {% assign gift_url = block.settings.gift_url_3 %}
-            {% elsif occasion.type == block.settings.occasion_type_4 %}
-              {% assign gift_url = block.settings.gift_url_4 %}
-            {% elsif occasion.type == block.settings.occasion_type_5 %}
-              {% assign gift_url = block.settings.gift_url_5 %}
-            {% endif %}
-            
-            {% if gift_url != blank %}
-              <button class="gift-btn" onclick="window.open('{{ gift_url }}', '_blank')">
-                Find a gift for {{ formatted_date }}
+
+            <div class="form-group">
+              <label>Occasion Type *</label>
+              <select class="occasion-type" required id="edit-occasion-type">
+                <option value="">Select occasion</option>
+                <!-- Only show non-blank occasion types in dropdown -->
+                {% if block.settings.occasion_type_1 != blank %}<option value="{{ block.settings.occasion_type_1 }}">{{ block.settings.occasion_type_1 }}</option>{% endif %}
+                {% if block.settings.occasion_type_2 != blank %}<option value="{{ block.settings.occasion_type_2 }}">{{ block.settings.occasion_type_2 }}</option>{% endif %}
+                {% if block.settings.occasion_type_3 != blank %}<option value="{{ block.settings.occasion_type_3 }}">{{ block.settings.occasion_type_3 }}</option>{% endif %}
+                {% if block.settings.occasion_type_4 != blank %}<option value="{{ block.settings.occasion_type_4 }}">{{ block.settings.occasion_type_4 }}</option>{% endif %}
+                {% if block.settings.occasion_type_5 != blank %}<option value="{{ block.settings.occasion_type_5 }}">{{ block.settings.occasion_type_5 }}</option>{% endif %}
+                {% if block.settings.occasion_type_6 != blank %}<option value="{{ block.settings.occasion_type_6 }}">{{ block.settings.occasion_type_6 }}</option>{% endif %}
+                {% if block.settings.occasion_type_7 != blank %}<option value="{{ block.settings.occasion_type_7 }}">{{ block.settings.occasion_type_7 }}</option>{% endif %}
+                {% if block.settings.occasion_type_8 != blank %}<option value="{{ block.settings.occasion_type_8 }}">{{ block.settings.occasion_type_8 }}</option>{% endif %}
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group other-group" hidden>
+              <label>Other Occasion</label>
+              <input type="text" class="other-occasion" placeholder="Specify the occasion" id="edit-other-occasion" />
+            </div>
+
+            <div class="form-group">
+              <label>Occasion Name *</label>
+              <input type="text" class="occasion-name" required placeholder="Enter occasion name" id="edit-occasion-name" />
+            </div>
+
+            <div class="modal-actions">
+              <!-- Updated button structure to ensure icon and text display on one line -->
+              <button type="submit" class="button button-primary submit-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                </svg>
+                <span class="btn-text">Add</span>
+                <span class="btn-loading" hidden>Creating Event...</span>
               </button>
+
+              <!-- Updated delete button structure for consistent inline display -->
+              <button type="button" class="button button-secondary delete-btn" hidden onclick="confirmDelete{{ block.id }}()">
+                <span class="delete-text">Delete Occasion</span>
+                <span class="delete-loading" hidden>Deleting...</span>
+              </button>
+              
+              <button type="button" class="button button-secondary confirm-delete-btn" hidden onclick="deleteOccasion{{ block.id }}()">
+                <span class="confirm-delete-text">Confirm Delete</span>
+                <span class="confirm-delete-loading" hidden>Deleting...</span>
+              </button>
+            </div>
+          </form>
+
+          <div class="form-message" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Display section -->
+    <div class="display-section">
+      <div class="occasions-card">
+        <h3 class="h5">{{ block.settings.display_heading }}</h3>
+
+        <!-- Updated customer greeting to summary page under heading -->
+        <div class="customer-greeting-summary">
+          <p class="customer-info">
+            {% assign no_occasions = customer.metafields.custom.my_occasions.value.size | default: 0 %}
+            {% assign target_occasions = block.settings.pressie_points_target | default: 3 %}
+            {% assign points_value = block.settings.pressie_points_value | default: 5 %}
+            {% if no_occasions == 0 %}
+              Hi {{ customer.first_name }}, add {{ target_occasions }} occasion reminders and earn {{ points_value }} Pressie Points.
+            {% elsif no_occasions < target_occasions %}
+              Hi {{ customer.first_name }}, add {{ target_occasions | minus: no_occasions }} more occasion reminders and earn {{ points_value }} Pressie Points.
+            {% else %}
+              Hi {{ customer.first_name }} congratulations, you have {{ no_occasions }} occasion reminders set. Please update or add more reminders below to keep your preferences up to date.
             {% endif %}
+          </p>
+        </div>
+
+        <div class="occasions-grid">
+          <!-- Move Add button to first position so it doesn't get affected by reordering -->
+          <div class="add-occasion-item">
+            <!-- Updated add button to use theme's .button class instead of .btn -->
+            <button class="button" onclick="openModal{{ block.id }}('Add Occasion Reminder')">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 8px;">
+                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+              </svg>
+              Add
+            </button>
           </div>
-        {% endfor %}
-        
-        {% if customer.metafields.custom.my_occasions.value.size == 0 %}
-          <p>No occasions found.</p>
-        {% endif %}
-        
-        <button class="add-btn" onclick="openAddForm{{ block.id }}()">+ Add</button>
+
+          {%- comment -%} Reverted to original occasions loop without sorting to fix display issue {%- endcomment -%}
+          {% for occasion in customer.metafields.custom.my_occasions.value %}
+            
+            {% assign day_number = occasion.date | date: "%-d" %}
+            {% assign month_name = occasion.date | date: "%B" %}
+            
+            {% if day_number == '1' or day_number == '21' or day_number == '31' %}
+              {% assign day_suffix = 'st' %}
+            {% elsif day_number == '2' or day_number == '22' %}
+              {% assign day_suffix = 'nd' %}
+            {% elsif day_number == '3' or day_number == '23' %}
+              {% assign day_suffix = 'rd' %}
+            {% else %}
+              {% assign day_suffix = 'th' %}
+            {% endif %}
+            
+            {% assign formatted_date = day_number | append: day_suffix | append: ' ' | append: month_name %}
+
+            {% assign gift_url = block.settings.default_gift_url %}
+            {%- case occasion.type -%}
+              {%- when block.settings.occasion_type_1 -%}
+                {%- unless block.settings.gift_url_1 == blank -%}{%- assign gift_url = block.settings.gift_url_1 -%}{%- endunless -%}
+              {%- when block.settings.occasion_type_2 -%}
+                {%- unless block.settings.gift_url_2 == blank -%}{%- assign gift_url = block.settings.gift_url_2 -%}{%- endunless -%}
+              {%- when block.settings.occasion_type_3 -%}
+                {%- unless block.settings.gift_url_3 == blank -%}{%- assign gift_url = block.settings.gift_url_3 -%}{%- endunless -%}
+              {%- when block.settings.occasion_type_4 -%}
+                {%- unless block.settings.gift_url_4 == blank -%}{%- assign gift_url = block.settings.gift_url_4 -%}{%- endunless -%}
+              {%- when block.settings.occasion_type_5 -%}
+                {%- unless block.settings.gift_url_5 == blank -%}{%- assign gift_url = block.settings.gift_url_5 -%}{%- endunless -%}
+              {%- when block.settings.occasion_type_6 -%}
+                {%- unless block.settings.gift_url_6 == blank -%}{%- assign gift_url = block.settings.gift_url_6 -%}{%- endunless -%}
+              {%- when block.settings.occasion_type_7 -%}
+                {%- unless block.settings.gift_url_7 == blank -%}{%- assign gift_url = block.settings.gift_url_7 -%}{%- endunless -%}
+              {%- when block.settings.occasion_type_8 -%}
+                {%- unless block.settings.gift_url_8 == blank -%}{%- assign gift_url = block.settings.gift_url_8 -%}{%- endunless -%}
+            {%- endcase -%}
+            {% if gift_url == blank %}
+              {% assign gift_url = block.settings.default_gift_url %}
+            {% endif %}
+
+            {% assign occasion_timestamp = occasion.date | date: "%s" | plus: 0 %}
+            {% assign current_timestamp = "now" | date: "%s" | plus: 0 %}
+            {% assign two_months_later = current_timestamp | plus: 5184000 %}
+            {% assign is_upcoming = false %}
+            {% if occasion_timestamp <= two_months_later and occasion_timestamp >= current_timestamp %}
+              {% assign is_upcoming = true %}
+            {% endif %}
+
+            <div class="occasion-item" 
+                 data-occasion-id="{{ occasion.id | default: 'no-id' }}"
+                 data-occasion-date="{{ occasion.date | date: '%Y-%m-%d' }}"
+                 data-type="{{ occasion.type }}"
+                 data-occasion-name="{{ occasion.occasion_name }}"
+                 data-other-occasion="{{ occasion.other_occasion }}">
+              <div class="occasion-header">
+                <div>
+                  <h4 class="occasion-name">{{ occasion.occasion_name }}</h4>
+                  <p class="occasion-date">{{ formatted_date }}</p>
+                </div>
+                <!-- Added type="button" to prevent form submission behavior -->
+                <button type="button" class="edit-btn"
+                        data-occasion-id="{{ occasion.system.id | default: occasion.id | default: occasion.gid | default: occasion.handle | default: 'no-id' }}"
+                        data-occasion-date="{{ occasion.date | date: '%Y-%m-%d' }}"
+                        data-type="{{ occasion.type }}"
+                        data-occasion-name="{{ occasion.occasion_name }}"
+                        data-other-occasion="{{ occasion.other_occasion }}">⋯</button>
+              </div>
+              <!-- Updated button text to show type or generic text for Other/unmatched types -->
+              {% assign button_text = "Find a Gift" %}
+              {% if occasion.type == block.settings.occasion_type_1 or occasion.type == block.settings.occasion_type_2 or occasion.type == block.settings.occasion_type_3 or occasion.type == block.settings.occasion_type_4 or occasion.type == block.settings.occasion_type_5 or occasion.type == block.settings.occasion_type_6 or occasion.type == block.settings.occasion_type_7 or occasion.type == block.settings.occasion_type_8 %}
+                {% assign button_text = "Find a Gift for " | append: occasion.type %}
+              {% endif %}
+              {%- comment -%} Fixed button class to match CSS styling {%- endcomment -%}
+              <!-- Updated gift buttons to use theme's .button class -->
+              <a href="{{ gift_url | escape }}" class="gift-link {% if is_upcoming %}gift-link-primary{% else %}gift-link-secondary{% endif %}">
+                {{ button_text }}
+              </a>
+            </div>
+          {% endfor %}
+          {% if customer.metafields.custom.my_occasions.value.size == 0 %}
+            <div class="occasions-message info" style="grid-column:1 / -1;">
+              <p>No occasions found.</p>
+            </div>
+          {% endif %}
+        </div>
       </div>
     </div>
-
-    {%- comment -%} 2. ADD OCCASION POPUP FORM {%- endcomment -%}
-    <div class="modal-overlay" id="add-modal-{{ block.id }}" style="display:none;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Add Occasion Reminder</h3>
-          <button onclick="closeAddForm{{ block.id }}()">×</button>
-        </div>
-        
-        <div class="greeting-box">
-          <p>Hi {{ customer.first_name }}.</p>
-          <p class="pressie-message" id="pressie-message-{{ block.id }}"></p>
-        </div>
-        
-        <form id="add-form-{{ block.id }}">
-          <div class="form-group">
-            <label>Date *</label>
-            <input type="date" class="event-date" required>
-          </div>
-          
-          <!-- Added type dropdown for add form with settings-based options -->
-          <div class="form-group">
-            <label>Type *</label>
-            <select class="occasion-type" required>
-              <option value="">Select type</option>
-              {% if block.settings.occasion_type_1 != blank %}
-                <option value="{{ block.settings.occasion_type_1 }}">{{ block.settings.occasion_type_1 }}</option>
-              {% endif %}
-              {% if block.settings.occasion_type_2 != blank %}
-                <option value="{{ block.settings.occasion_type_2 }}">{{ block.settings.occasion_type_2 }}</option>
-              {% endif %}
-              {% if block.settings.occasion_type_3 != blank %}
-                <option value="{{ block.settings.occasion_type_3 }}">{{ block.settings.occasion_type_3 }}</option>
-              {% endif %}
-              {% if block.settings.occasion_type_4 != blank %}
-                <option value="{{ block.settings.occasion_type_4 }}">{{ block.settings.occasion_type_4 }}</option>
-              {% endif %}
-              {% if block.settings.occasion_type_5 != blank %}
-                <option value="{{ block.settings.occasion_type_5 }}">{{ block.settings.occasion_type_5 }}</option>
-              {% endif %}
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label>Occasion Name *</label>
-            <input type="text" class="occasion-name" placeholder="Enter occasion name" required>
-          </div>
-          
-          <button type="submit" class="add-submit-btn" disabled>+ Add</button>
-          <div class="form-message"></div>
-        </form>
-      </div>
-    </div>
-
-    {%- comment -%} 3. EDIT OCCASION POPUP FORM {%- endcomment -%}
-    <div class="modal-overlay" id="edit-modal-{{ block.id }}" style="display:none;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Edit Occasion</h3>
-          <button onclick="closeEditForm{{ block.id }}()">×</button>
-        </div>
-        
-        <div class="greeting-box">
-          <p>Hi {{ customer.first_name }}.</p>
-        </div>
-        
-        <form id="edit-form-{{ block.id }}">
-          <input type="hidden" class="edit-occasion-id">
-          
-          <div class="form-group">
-            <label>Date *</label>
-            <input type="date" class="edit-event-date" required>
-          </div>
-          
-          <!-- Added free text input for type in edit form -->
-          <div class="form-group">
-            <label>Type</label>
-            <input type="text" class="edit-occasion-type" placeholder="Enter occasion type">
-          </div>
-          
-          <div class="form-group">
-            <label>Occasion Name *</label>
-            <input type="text" class="edit-occasion-name" required>
-          </div>
-
-          <button type="submit" class="save-btn">Save</button>
-          <button type="button" class="delete-btn" onclick="deleteOccasion{{ block.id }}()">Delete Occasion</button>
-          <div class="edit-form-message"></div>
-        </form>
-      </div>
-    </div>
-
   {% else %}
     <div class="login-required">
-      <p>Please <a href="{{ routes.account_login_url }}">log in</a> to manage your occasions.</p>
+      <h5>Please log in to manage your occasions</h5>
+      <p><a href="{{ routes.account_login_url }}">Log in to your account</a></p>
     </div>
   {% endif %}
 </div>
 
-{%- comment -%} 4. SCRIPT TO SORT CARDS AND HANDLE FORMS {%- endcomment -%}
-<script>
-(function() {
-  const blockId = '{{ block.id }}';
-  const customerId = '{{ customer.id }}';
-  const apiUrl = '{{ block.settings.api_url | escape }}';
-  
-  let occasionCount = {{ customer.metafields.custom.my_occasions.value.size | default: 0 }};
-  
-  function openAddForm() {
-    updatePressieMessage();
-    document.getElementById('add-modal-' + blockId).style.display = 'flex';
-  }
-  
-  function closeAddForm() {
-    document.getElementById('add-modal-' + blockId).style.display = 'none';
-  }
-  
-  function closeEditForm() {
-    document.getElementById('edit-modal-' + blockId).style.display = 'none';
-  }
-  
-  async function deleteOccasion() {
-    const editForm = document.getElementById('edit-form-' + blockId);
-    const occasionId = editForm.querySelector('.edit-occasion-id').value;
-    
-    if (!occasionId || occasionId === 'undefined' || occasionId === '') {
-      editForm.querySelector('.edit-form-message').textContent = 'Delete failed: Invalid occasion ID';
-      return;
-    }
-    
-    let formattedId = occasionId;
-    if (!occasionId.startsWith('gid://shopify/Metaobject/')) {
-      formattedId = `gid://shopify/Metaobject/${occasionId}`;
-    }
-    
-    try {
-      const response = await fetch('/api/change-metaobject', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: formattedId,
-          operation: 'delete',
-          customer: customerId
-        })
-      });
-      
-      if (response.ok) {
-        occasionCount--;
-        closeEditForm();
-        location.reload();
-      } else {
-        const error = await response.json();
-        console.error('Delete error:', error);
-        editForm.querySelector('.edit-form-message').textContent = 'Delete failed: ' + (error.error || 'Server error');
-      }
-    } catch (error) {
-      console.error('Delete network error:', error);
-      editForm.querySelector('.edit-form-message').textContent = 'Delete failed: Network error - check API endpoint';
-    }
-  }
-  
-  window['openAddForm' + blockId] = openAddForm;
-  window['closeAddForm' + blockId] = closeAddForm;
-  window['closeEditForm' + blockId] = closeEditForm;
-  window['deleteOccasion' + blockId] = deleteOccasion;
-  
-  function sortOccasions() {
-    const grid = document.getElementById('occasions-grid-' + blockId);
-    if (!grid) return;
-    
-    const items = Array.from(grid.querySelectorAll('.occasion-item'));
-    
-    items.sort((a, b) => {
-      const dateA = new Date(a.querySelector('.edit-btn').dataset.occasionDate);
-      const dateB = new Date(b.querySelector('.edit-btn').dataset.occasionDate);
-      return dateA - dateB;
-    });
-    
-    items.forEach(item => grid.appendChild(item));
-  }
-  
-  function updatePressieMessage() {
-    const messageEl = document.getElementById('pressie-message-' + blockId);
-    if (!messageEl) return;
-    
-    if (occasionCount === 0) {
-      messageEl.textContent = 'Add 3 occasion reminders and earn Pressie Points.';
-    } else if (occasionCount < 3) {
-      messageEl.textContent = `You have ${occasionCount} occasion reminder${occasionCount === 1 ? '' : 's'} saved, add 3 to earn Pressie Points.`;
-    } else {
-      messageEl.textContent = `Great job, you have ${occasionCount} occasion reminders saved!`;
-    }
-  }
-  
-  function setupForms() {
-    const addForm = document.getElementById('add-form-' + blockId);
-    const editForm = document.getElementById('edit-form-' + blockId);
-    
-    if (addForm) {
-      const submitBtn = addForm.querySelector('.add-submit-btn');
-      
-      addForm.addEventListener('input', function() {
-        const isValid = addForm.querySelector('.event-date').value &&
-                       addForm.querySelector('.occasion-type').value &&
-                       addForm.querySelector('.occasion-name').value;
-        submitBtn.disabled = !isValid;
-      });
-      
-      addForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const formData = {
-          customer: customerId,
-          date: addForm.querySelector('.event-date').value,
-          type: addForm.querySelector('.occasion-type').value,
-          occasion_name: addForm.querySelector('.occasion-name').value
-        };
-        
-        try {
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-          });
-          
-          if (response.ok) {
-            occasionCount++;
-            updatePressieMessage();
-            if (occasionCount >= 10) {
-              closeAddForm();
-            } else {
-              addForm.reset();
-              submitBtn.disabled = true;
-            }
-            location.reload();
-          } else {
-            const error = await response.json();
-            console.error('Add error:', error);
-            addForm.querySelector('.form-message').textContent = 'Error: ' + (error.error || 'Unknown error');
-          }
-        } catch (error) {
-          console.error('Add error:', error);
-          addForm.querySelector('.form-message').textContent = 'Error: Network error';
-        }
-      });
-    }
-    
-    if (editForm) {
-      editForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const formData = {
-          id: editForm.querySelector('.edit-occasion-id').value,
-          customer: customerId,
-          date: editForm.querySelector('.edit-event-date').value,
-          type: editForm.querySelector('.edit-occasion-type').value,
-          occasion_name: editForm.querySelector('.edit-occasion-name').value,
-          operation: 'update'
-        };
-        
-        try {
-          const response = await fetch('/api/change-metaobject', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-          });
-          
-          if (response.ok) {
-            closeEditForm();
-            location.reload();
-          } else {
-            const error = await response.json();
-            console.error('Update error:', error);
-            editForm.querySelector('.edit-form-message').textContent = 'Update failed: ' + (error.error || 'Unknown error');
-          }
-        } catch (error) {
-          console.error('Update error:', error);
-          editForm.querySelector('.edit-form-message').textContent = 'Update failed: Network error';
-        }
-      });
-    }
-  }
-  
-  document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('edit-btn')) {
-      const data = e.target.dataset;
-      const editForm = document.getElementById('edit-form-' + blockId);
-      
-      if (editForm) {
-        editForm.querySelector('.edit-occasion-id').value = data.occasionId || '';
-        editForm.querySelector('.edit-event-date').value = data.occasionDate || '';
-        editForm.querySelector('.edit-occasion-name').value = data.occasionName || '';
-        editForm.querySelector('.edit-occasion-type').value = data.occasionType || '';
-        
-        document.getElementById('edit-modal-' + blockId).style.display = 'flex';
-      }
-    }
-  });
-  
-  // Initialize everything when DOM is ready
-  document.addEventListener('DOMContentLoaded', function() {
-    sortOccasions();
-    setupForms();
-    updatePressieMessage();
-  });
-})();
-</script>
+{% stylesheet %}
+/* Container */
+.occasions-manager{
+  max-width:1200px;
+  margin:0 auto;
+  /* Added more aggressive margin and padding reset to eliminate all left spacing */
+  padding:0 !important;
+  margin-left:0 !important;
+  width:100%;
+  box-sizing: border-box;
+}
 
-{%- comment -%} 5. SCHEMA FOR SETTINGS {%- endcomment -%}
+/* ===== Modal: styles work before AND after portal ===== */
+.occasions-manager .modal-overlay,
+.occasions-modal-overlay{
+  position:fixed;
+  inset:0;
+  background:var(--color-overlay, rgba(0,0,0,.5));
+  z-index:2147483647; /* above sticky headers/footers */
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+
+.occasions-manager .modal-content,
+.occasions-modal-overlay .modal-content{
+  background:var(--color-background);
+  color:var(--color-foreground);
+  border-radius:var(--style-border-radius-card, 12px);
+  max-width:520px;width:100%;
+  max-height:90vh;overflow-y:auto;
+  box-shadow:var(--shadow-card, 0 20px 40px rgba(0,0,0,.15));
+}
+
+/* Fixed h3 header styling to use proper theme typography */
+.occasions-manager .modal-header,
+.occasions-modal-overlay .modal-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:28px 28px 20px;
+  border-bottom:1px solid var(--color-border);
+  margin-bottom:0;
+}
+
+.occasions-manager .modal-title,
+.occasions-modal-overlay .modal-title{
+  margin:0;
+  color:var(--color-foreground);
+  /* Using exact h3 theme font family and typography variables */
+  font-family:var(--font-family-heading);
+  font-size:var(--font-size-h3);
+  font-weight:var(--font-weight-h3);
+  line-height:var(--line-height-h3);
+  letter-spacing:var(--letter-spacing-h3);
+}
+
+/* Refined close button styling */
+.occasions-manager .modal-close,
+.occasions-modal-overlay .modal-close{
+  background:transparent;
+  border:1px solid var(--color-border);
+  border-radius:var(--style-border-radius-button, 6px);
+  cursor:pointer;
+  color:var(--color-foreground-secondary, #666);
+  padding:6px;width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s ease;
+}
+.occasions-manager .modal-close:hover,
+.occasions-modal-overlay .modal-close:hover{
+  background:var(--color-background-secondary, #f8f9fa);
+  color:var(--color-foreground);
+  border-color:var(--color-foreground-secondary, #999);
+}
+
+/* Enhanced modal body with refined spacing */
+.occasions-manager .modal-body,
+.occasions-modal-overlay .modal-body{padding:28px}
+
+/* Updated customer greeting styling for single line display with left alignment and 10px margin */
+.occasions-manager .customer-greeting-summary{
+  margin: 0 0 10px 0;
+  /* Completely removed all padding and margin to ensure proper left alignment with header */
+  padding: 0;
+  text-align: left;
+}
+
+.occasions-manager .customer-greeting-summary .customer-info{
+  margin: 0;
+  /* Completely removed all padding to ensure proper left alignment with header */
+  padding: 0;
+  font-size: 1rem;
+  color: var(--color-foreground);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+/* Enhanced form styling for better visual hierarchy */
+.occasions-manager .form-content {
+  margin-top: 0;
+  padding: 0 4px; /* Add subtle padding for better alignment */
+}
+
+/* Improved form group spacing and layout */
+.occasions-manager .form-group {
+  margin-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+}
+
+.occasions-manager .form-group label {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-foreground);
+  margin-bottom: 12px;
+  font-size: 1.1rem;
+  letter-spacing: 0.01em;
+}
+
+/* Enhanced input and select styling with professional appearance */
+.occasions-manager .form-group input,
+.occasions-manager .form-group select {
+  width: 100%;
+  padding: 18px 24px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--style-border-radius-form-elements, 8px);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-size: 1.05rem;
+  line-height: 1.4;
+  transition: all 0.3s ease;
+  min-height: 60px;
+  box-sizing: border-box;
+  font-family: var(--font-family-body);
+}
+
+.occasions-manager .form-group input:focus,
+.occasions-manager .form-group select:focus {
+  outline: none;
+  border-color: var(--color-primary-button-background);
+  box-shadow: 0 0 0 4px rgba(var(--color-primary-button-background-rgb, 0, 0, 0), 0.15);
+  background-color: var(--color-background);
+}
+
+/* Professional select dropdown styling */
+.occasions-manager .form-group select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23374151' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 24px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 60px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+/* Enhanced modal actions with better button alignment and spacing */
+.occasions-manager .modal-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-border);
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+/* Enhanced button styling to ensure icon and text display inline properly */
+.occasions-manager .button {
+  font-family: var(--button-font-family-primary);
+  font-weight: var(--button-font-weight-primary);
+  text-transform: var(--button-text-case-primary);
+  border-radius: var(--style-border-radius-buttons-primary, 8px);
+  
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  text-align: center;
+  color: var(--color-primary-button-text);
+  background-color: var(--color-primary-button-background);
+  border: var(--style-border-width-primary, 2px) solid var(--color-primary-button-border);
+  padding: 16px 24px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  min-height: 52px;
+  white-space: nowrap;
+  font-size: 1rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+  min-width: 120px;
+  box-sizing: border-box;
+}
+
+/* Ensure SVG icons in buttons align properly with text */
+.occasions-manager .button svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+/* Ensure button text spans don't break the inline layout */
+.occasions-manager .button span {
+  display: inline;
+  white-space: nowrap;
+}
+
+/* Secondary button styling for delete actions */
+.occasions-manager .button-secondary {
+  color: var(--color-secondary-button-text, var(--color-foreground));
+  background-color: var(--color-secondary-button-background, transparent);
+  border-color: var(--color-secondary-button-border, var(--color-border));
+}
+
+.occasions-manager .button-secondary:hover {
+  background-color: var(--color-secondary-button-background-hover, var(--color-background-secondary));
+  color: var(--color-secondary-button-text-hover, var(--color-foreground));
+  border-color: var(--color-secondary-button-border-hover, var(--color-foreground-secondary));
+}
+
+/* Updated occasions grid to 4 columns with 20% wider tiles */
+.occasions-manager .occasions-grid{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:24px;
+  align-items: start;
+  /* Completely removed margin and padding to align with header */
+  margin: 0;
+  padding: 0;
+}
+
+/* Occasion item styling */
+.occasions-manager .occasion-item {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  /* Reduced padding from 24px to 16px to make cards shorter */
+  padding: 16px;
+  min-width: 288px; /* Increased from 240px to 288px (20% wider) */
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Reduced min-height from 200px to 160px to make cards shorter */
+  min-height: 160px;
+}
+
+/* Added hover effects for occasion tiles */
+.occasions-manager .occasion-item:hover{
+  border-color:var(--color-primary-button-background);
+  transform:translateY(-2px);
+  box-shadow:0 8px 25px rgba(0,0,0,0.1);
+}
+
+.occasions-manager .occasion-item .occasion-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+
+.occasions-manager .occasion-item .occasion-name{
+  font-weight:var(--font-weight-bold, 600);
+  font-size:18px;margin:0;
+  color:var(--color-foreground);
+}
+
+.occasions-manager .occasion-item .occasion-date{
+  color:var(--color-foreground-secondary, #666);
+  font-size:15px;margin:4px 0 16px 0;
+}
+
+.occasions-manager .occasion-item .edit-btn{
+  background:none;
+  border:1px solid var(--color-border);
+  border-radius:var(--style-border-radius-button, 4px);
+  padding:6px 10px;cursor:pointer;font-size:14px;
+  color:var(--color-foreground-secondary, #666);
+  transition:all 0.2s ease;
+}
+.occasions-manager .occasion-item .edit-btn:hover{
+  background:var(--color-background-secondary, #f5f5f5);
+  border-color:var(--color-primary-button-background);
+}
+
+/* Add occasion button -> secondary look */
+.occasions-manager .add-occasion-item {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  /* Reduced padding from 24px to 16px to match occasion cards */
+  padding: 16px;
+  min-width: 288px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Reduced min-height from 200px to 160px to match occasion cards */
+  min-height: 160px;
+}
+
+/* Added hover effects for add button to match occasion cards */
+.occasions-manager .add-occasion-item:hover {
+  border-color: var(--color-primary-button-background);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+/* Use theme colors for form messages */
+.occasions-manager .form-message,
+.occasions-manager .occasions-message{
+  margin-top:20px;padding:16px 20px;
+  border-radius:var(--style-border-radius-card, 8px);
+  text-align:center;
+  font-size:0.95rem;
+}
+
+.occasions-manager .form-message.success,
+.occasions-manager .occasions-message.success{
+  background:var(--color-success-background, #d4edda);
+  color:var(--color-success-text, #155724);
+  border:1px solid var(--color-success-border, #c3e6cb);
+}
+
+.occasions-manager .form-message.error,
+.occasions-manager .occasions-message.error{
+  background:var(--color-error-background, #f8d7da);
+  color:var(--color-error-text, #721c24);
+  border:1px solid var(--color-error-border, #f5c6cb);
+}
+
+/* Added link styling for gift buttons instead of button classes */
+.occasions-manager .gift-link {
+  color: var(--color-link);
+  text-decoration: underline;
+  font-size: 0.9rem;
+  transition: color 0.2s ease;
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.occasions-manager .gift-link:hover {
+  color: var(--color-link-hover);
+  text-decoration: none;
+}
+
+.occasions-manager .gift-link-primary {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.occasions-manager .gift-link-secondary {
+  color: var(--color-foreground-secondary);
+}
+
+/* Added specific overrides for display section and occasions card to ensure no inherited spacing */
+.occasions-manager .display-section {
+  margin: 0 !important;
+  padding: 0 !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+.occasions-manager .occasions-card {
+  margin: 0 !important;
+  padding: 0 !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+/* Added aggressive reset for heading to ensure no inherited spacing */
+.occasions-manager .occasions-card h3 {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+/* Added Shopify block CSS to remove left-hand gutter */
+.shopify-block.section:has(> [data-block="occasions-manager"]) {
+  --padding-inline: 0 !important;
+  grid-template-columns: 0 minmax(0, 1fr) 0 !important;
+}
+{% endstylesheet %}
+
+{% javascript %}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-block="occasions-manager"]').forEach((root) => {
+    const configScript = root.querySelector('[data-occasions-config]');
+    const config = configScript ? JSON.parse(configScript.textContent) : {};
+    const blockId = config.blockId;
+
+    const form = root.querySelector('form');
+    const formMessageDiv = root.querySelector('.form-message');
+    const endpoint = (root.dataset.apiUrl || '').trim();
+
+    const modalOverlay = root.querySelector('.modal-overlay');
+    const modalTitle = root.querySelector('.modal-title');
+
+    if (!form || !config.customerId) return;
+
+    const submitBtn = form.querySelector('.submit-btn');
+    const occasionTypeSelect = form.querySelector('.occasion-type');
+    const otherOccasionGroup = form.querySelector('.other-group');
+    const requiredFields = form.querySelectorAll('[required]');
+
+    let currentOccasionCount = parseInt(document.querySelector('.occasion-count')?.textContent) || 0;
+
+    function sortOccasionsByProximity() {
+      const occasionsGrid = root.querySelector('.occasions-grid');
+      if (!occasionsGrid) return;
+
+      const occasionItems = Array.from(occasionsGrid.querySelectorAll('.occasion-item'));
+      if (occasionItems.length === 0) return;
+
+      const today = new Date();
+      const todayMonth = today.getMonth(); // 0-11
+      const todayDay = today.getDate(); // 1-31
+
+      occasionItems.sort((a, b) => {
+        // Extract dates from the occasion items
+        const dateA = a.querySelector('.edit-btn').dataset.occasionDate;
+        const dateB = b.querySelector('.edit-btn').dataset.occasionDate;
+        
+        if (!dateA || !dateB) return 0;
+
+        const parsedA = new Date(dateA);
+        const parsedB = new Date(dateB);
+        
+        const monthA = parsedA.getMonth();
+        const dayA = parsedA.getDate();
+        const monthB = parsedB.getMonth();
+        const dayB = parsedB.getDate();
+
+        // Calculate days until next occurrence (ignoring year)
+        function daysUntilNext(month, day) {
+          const thisYear = today.getFullYear();
+          let nextOccurrence = new Date(thisYear, month, day);
+          
+          // If the date has already passed this year, use next year
+          if (nextOccurrence < today) {
+            nextOccurrence = new Date(thisYear + 1, month, day);
+          }
+          
+          return Math.ceil((nextOccurrence - today) / (1000 * 60 * 60 * 24));
+        }
+
+        const daysA = daysUntilNext(monthA, dayA);
+        const daysB = daysUntilNext(monthB, dayB);
+
+        return daysA - daysB;
+      });
+
+      // Re-append sorted items to the grid
+      occasionItems.forEach(item => occasionsGrid.appendChild(item));
+    }
+
+    sortOccasionsByProximity();
+
+    // Function to validate form and enable/disable submit button
+    function validateForm() {
+      let isValid = true;
+      
+      // Check all required fields
+      requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+          isValid = false;
+        }
+      });
+
+      // If "Other" is selected, check if other_occasion field has value
+      if (occasionTypeSelect.value === 'Other') {
+        const otherOccasionInput = form.querySelector('.other-occasion');
+        if (!otherOccasionInput.value.trim()) {
+          isValid = false;
+        }
+      }
+
+      submitBtn.disabled = !isValid;
+    }
+
+    // Show/hide other occasion field based on dropdown selection
+    function toggleOtherOccasionField() {
+      if (occasionTypeSelect.value === 'Other') {
+        otherOccasionGroup.hidden = false;
+        form.querySelector('.other-occasion').required = true;
+      } else {
+        otherOccasionGroup.hidden = true;
+        form.querySelector('.other-occasion').required = false;
+        form.querySelector('.other-occasion').value = '';
+      }
+      validateForm();
+    }
+
+    // Add event listeners for form validation
+    requiredFields.forEach(field => {
+      field.addEventListener('input', validateForm);
+      field.addEventListener('change', validateForm);
+    });
+
+    // Add event listener for other occasion field
+    form.querySelector('.other-occasion').addEventListener('input', validateForm);
+
+    // Add event listener for occasion type dropdown
+    occasionTypeSelect.addEventListener('change', toggleOtherOccasionField);
+
+    // Initial validation
+    validateForm();
+
+    // Move overlay to <body> to avoid theme stacking contexts
+    function portalize() {
+      if (!modalOverlay.dataset.portalized) {
+        document.body.appendChild(modalOverlay);
+        modalOverlay.dataset.portalized = '1';
+        modalOverlay.classList.add('occasions-modal-overlay');
+      }
+    }
+
+    window[`openModal${blockId}`] = function(title = config.buttonLabel || 'Add Occasion') {
+      portalize();
+      modalTitle.textContent = title;
+      
+      // Reset form to add mode when opening for add
+      if (title === 'Add Occasion Reminder') {
+        resetFormToAdd();
+      }
+      
+      modalOverlay.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      currentOccasionCount = root.querySelectorAll('.occasion-item').length;
+      validateForm();
+    };
+
+    window[`closeModal${blockId}`] = function() {
+      modalOverlay.style.display = 'none';
+      document.body.style.overflow = '';
+      resetFormToAdd();
+    };
+
+    window[`deleteOccasion${blockId}`] = function() {
+      const occasionIdInput = form.querySelector('.occasion-id');
+      if (!occasionIdInput.value) return;
+      handleDelete();
+    };
+
+    window[`confirmDelete${blockId}`] = function() {
+      const deleteBtn = form.querySelector('.delete-btn');
+      const confirmDeleteBtn = form.querySelector('.confirm-delete-btn');
+      deleteBtn.hidden = true;
+      confirmDeleteBtn.hidden = false;
+    };
+
+    // Close on backdrop click / ESC
+    modalOverlay.onclick = function(e){ if (e.target === modalOverlay) window[`closeModal${blockId}`](); };
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modalOverlay.style.display==='flex') window[`closeModal${blockId}`](); });
+
+    function showFormMessage(type, text){
+      formMessageDiv.className = `form-message ${type}`;
+      formMessageDiv.textContent = text;
+      formMessageDiv.hidden = false;
+    }
+
+    function populateFormForEdit(o) {
+      const form = document.getElementById(`edit-form-${blockId}`);
+      if (!form) return;
+
+      const eventDate = form.querySelector('#edit-event-date');
+      const occasionType = form.querySelector('#edit-occasion-type');
+      const occasionName = form.querySelector('#edit-occasion-name');
+      const occasionId = form.querySelector('#edit-occasion-id');
+      const btnText = form.querySelector('.btn-text');
+      const deleteBtn = form.querySelector('.delete-btn');
+      const confirmDeleteBtn = form.querySelector('.confirm-delete-btn');
+      
+      if (eventDate) eventDate.value = o.date;
+      if (occasionType) occasionType.value = o.type;
+      if (occasionName) occasionName.value = o.occasion_name;
+      if (occasionId) occasionId.value = o.id || '';
+
+      if (btnText) btnText.textContent = 'Save';
+      if (deleteBtn) deleteBtn.hidden = false;
+      if (confirmDeleteBtn) confirmDeleteBtn.hidden = true;
+
+      window[`openModal${blockId}`]('Edit Occasion');
+      toggleOtherOccasionField();
+      validateForm();
+    }
+
+    function resetFormToAdd() {
+      const form = document.getElementById(`edit-form-${blockId}`);
+      if (!form) return;
+
+      const eventDate = form.querySelector('#edit-event-date');
+      const occasionType = form.querySelector('#edit-occasion-type');
+      const occasionName = form.querySelector('#edit-occasion-name');
+      const occasionId = form.querySelector('#edit-occasion-id');
+      const otherGroup = form.querySelector('.other-group');
+      const otherInput = form.querySelector('#edit-other-occasion');
+      const formMessageDiv = form.querySelector('.form-message');
+      const btnText = form.querySelector('.btn-text');
+      const deleteBtn = form.querySelector('.delete-btn');
+      const confirmDeleteBtn = form.querySelector('.confirm-delete-btn');
+      
+      // Reset all form fields
+      if (eventDate) eventDate.value = '';
+      if (occasionType) occasionType.value = '';
+      if (occasionName) occasionName.value = '';
+      if (occasionId) occasionId.value = '';
+      if (otherInput) otherInput.value = '';
+      
+      // Reset form state
+      if (otherGroup) otherGroup.hidden = true;
+      if (otherInput) otherInput.required = false;
+      if (btnText) btnText.textContent = 'Add';
+      if (deleteBtn) deleteBtn.hidden = true;
+      if (confirmDeleteBtn) confirmDeleteBtn.hidden = true;
+      if (formMessageDiv) formMessageDiv.hidden = true;
+      
+      validateForm();
+    }
+
+    async function handleDelete(){
+      const confirmDeleteBtn = form.querySelector('.confirm-delete-btn');
+      const confirmDeleteText = confirmDeleteBtn.querySelector('.confirm-delete-text');
+      const confirmDeleteLoading = confirmDeleteBtn.querySelector('.confirm-delete-loading');
+      const occasionIdInput = form.querySelector('.occasion-id');
+
+      confirmDeleteBtn.disabled = true; confirmDeleteText.hidden = true; confirmDeleteLoading.hidden = false;
+
+      try{
+        const deleteEndpoint = endpoint.replace('/api/create-metaobject','/api/change-metaobject');
+        const r = await fetch(deleteEndpoint,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ 
+            operation: 'delete',
+            id: occasionIdInput.value, 
+            customer: config.customerId 
+          })
+        });
+        if(!r.ok){ const t = await r.text(); let j={}; try{ j=t?JSON.parse(t):{} }catch{}; throw new Error(j.error||t||`HTTP ${r.status}`); }
+        
+        currentOccasionCount = Math.max(0, currentOccasionCount - 1);
+        
+        showFormMessage('success','Occasion deleted successfully!');
+        setTimeout(()=> {
+          window[`closeModal${blockId}`]();
+          refreshOccasionsSummary();
+        }, 1500);
+      }catch(err){
+        showFormMessage('error',`Delete failed: ${err.message}`);
+      }finally{
+        confirmDeleteBtn.disabled = false; confirmDeleteText.hidden = false; confirmDeleteLoading.hidden = true;
+      }
+    }
+
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const submitBtn = form.querySelector('.submit-btn');
+      const btnText = submitBtn.querySelector('.btn-text');
+      const btnLoading = submitBtn.querySelector('.btn-loading');
+
+      submitBtn.disabled = true; btnText.hidden = true; btnLoading.hidden = false; formMessageDiv.hidden = true;
+
+      const isEditing = !!form.querySelector('.occasion-id').value;
+      const payload = {
+        customer: config.customerId,
+        date: form.querySelector('.event-date').value,
+        type: form.querySelector('.occasion-type').value,
+        other_occasion: form.querySelector('.other-occasion').value,
+        occasion_name: form.querySelector('.occasion-name').value
+      };
+      if(isEditing) payload.id = form.querySelector('.occasion-id').value;
+
+      try{
+        const r = await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const t = await r.text(); let j={}; try{ j=t?JSON.parse(t):{} }catch{}
+        if(!r.ok) throw new Error(j.error||t||`HTTP ${r.status}`);
+        
+        if (!isEditing) {
+          currentOccasionCount++;
+        }
+        
+        if (!isEditing && currentOccasionCount < 10) {
+          showFormMessage('success', 'Occasion added! Add another one below.');
+          resetFormToAdd();
+          // Keep modal open and reset form for next entry
+          setTimeout(() => {
+            if (formMessageDiv) formMessageDiv.hidden = true;
+          }, 3000);
+        } else if (!isEditing && currentOccasionCount >= 10) {
+          showFormMessage('success', 'Congratulations! You\'ve reached the maximum of 10 occasions.');
+          setTimeout(()=> {
+            window[`closeModal${blockId}`]();
+            refreshOccasionsSummary();
+          }, 2000);
+        } else {
+          // Edit mode - close modal and refresh
+          showFormMessage('success', 'Event updated successfully!');
+          setTimeout(()=> {
+            window[`closeModal${blockId}`]();
+            refreshOccasionsSummary();
+          }, 1500);
+        }
+      }catch(err){
+        showFormMessage('error',`Error: ${err.message}`);
+      }finally{
+        submitBtn.disabled = false; btnText.hidden = false; btnLoading.hidden = true;
+      }
+    });
+
+    function attachEditHandlers() {
+      const occasionsGrid = root.querySelector('.occasions-grid');
+      if (occasionsGrid) {
+        occasionsGrid.addEventListener('click', function(e) {
+          const editBtn = e.target.closest('.edit-btn');
+          if (editBtn) {
+            const occasionData = {
+              id: editBtn.dataset.occasionId,
+              date: editBtn.dataset.occasionDate,
+              type: editBtn.dataset.type,
+              occasion_name: editBtn.dataset.occasionName,
+              other_occasion: editBtn.dataset.otherOccasion
+            };
+            populateFormForEdit(occasionData);
+          }
+        });
+      }
+    }
+
+    function refreshOccasionsSummary() {
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    }
+
+    attachEditHandlers();
+  });
+});
+{% endjavascript %}
+
 {% schema %}
 {
-  "name": "Occasion Reminders",
+  "name": "Occasions Manager",
+  "tag": "section",
+  "class": "section",
   "settings": [
     { "type": "text", "id": "api_url", "label": "API URL", "default": "/api/create-metaobject" },
+    { "type": "text", "id": "button_label", "label": "Button Label", "default": "Add" },
     { "type": "text", "id": "display_heading", "label": "Display Heading", "default": "My Occasions" },
-    { "type": "text", "id": "occasion_type_1", "label": "Occasion Type 1", "default": "Birthday" },
-    { "type": "url", "id": "gift_url_1", "label": "Gift URL 1" },
-    { "type": "text", "id": "occasion_type_2", "label": "Occasion Type 2", "default": "Anniversary" },
-    { "type": "url", "id": "gift_url_2", "label": "Gift URL 2" },
-    { "type": "text", "id": "occasion_type_3", "label": "Occasion Type 3", "default": "Wedding" },
-    { "type": "url", "id": "gift_url_3", "label": "Gift URL 3" },
-    { "type": "text", "id": "occasion_type_4", "label": "Occasion Type 4", "default": "Graduation" },
-    { "type": "url", "id": "gift_url_4", "label": "Gift URL 4" },
-    { "type": "text", "id": "occasion_type_5", "label": "Occasion Type 5", "default": "Holiday" },
-    { "type": "url", "id": "gift_url_5", "label": "Gift URL 5" },
-    { "type": "text", "id": "default_gift_url", "label": "Default Gift URL", "default": "/collections/biscuits" }
-  ],
-  "presets": [{ "name": "Occasion Reminders" }]
+    { "type":"header","content":"Pressie Points Configuration" },
+    { "type":"number","id":"pressie_points_target","label":"Occasions Required for Points","default":3,"info":"Number of occasions needed to earn Pressie Points" },
+    { "type":"number","id":"pressie_points_value","label":"Points Value","default":5,"info":"Number of Pressie Points awarded when target is reached" },
+    { "type":"header","content":"Gift URLs by Occasion Type" },
+    { "type":"text","id":"occasion_type_1","label":"Occasion Type 1","default":"Dad's Birthday","info":"Will be populated dynamically from metafield definition" },
+    { "type":"url","id":"gift_url_1","label":"Gift URL 1","info":"Enter relative path like /collections/gifts or full URL" },
+    { "type":"text","id":"occasion_type_2","label":"Occasion Type 2","default":"Mum's Birthday","info":"Will be populated dynamically from metafield definition" },
+    { "type":"url","id":"gift_url_2","label":"Gift URL 2","info":"Enter relative path like /collections/gifts or full URL" },
+    { "type":"text","id":"occasion_type_3","label":"Occasion Type 3","default":"Family Birthday","info":"Will be populated dynamically from metafield definition" },
+    { "type":"url","id":"gift_url_3","label":"Gift URL 3","info":"Enter relative path like /collections/gifts or full URL" },
+    { "type":"text","id":"occasion_type_4","label":"Occasion Type 4","default":"Friend's Birthday","info":"Will be populated dynamically from metafield definition" },
+    { "type":"url","id":"gift_url_4","label":"Gift URL 4","info":"Enter relative path like /collections/gifts or full URL" },
+    { "type":"text","id":"occasion_type_5","label":"Occasion Type 5","default":"Anniversary","info":"Will be populated dynamically from metafield definition" },
+    { "type":"url","id":"gift_url_5","label":"Gift URL 5","info":"Enter relative path like /collections/gifts or full URL" },
+    { "type":"text","id":"occasion_type_6","label":"Occasion Type 6","default":"Mother's Day","info":"Will be populated dynamically from metafield definition" },
+    { "type":"url","id":"gift_url_6","label":"Gift URL 6","info":"Enter relative path like /collections/gifts or full URL" },
+    { "type":"text","id":"occasion_type_7","label":"Occasion Type 7","default":"Father's Day","info":"Will be populated dynamically from metafield definition" },
+    { "type":"url","id":"gift_url_7","label":"Gift URL 7","info":"Enter relative path like /collections/gifts or full URL" },
+    { "type":"text","id":"occasion_type_8","label":"Occasion Type 8","default":"Anniversary","info":"Will be populated dynamically from metafield definition" },
+    { "type":"url","id":"gift_url_8","label":"Gift URL 8","info":"Enter relative path like /collections/gifts or full URL" },
+    { "type":"header","content":"Default Gift URL" },
+    { "type":"text","id":"default_gift_url","label":"Default Gift URL","info":"Used when no specific URL is set for an occasion type","default":"/collections/biscuits" }
+  ]
 }
 {% endschema %}
-
-<style>
-.occasions-manager { max-width: 800px; margin: 0 auto; padding: 20px; }
-.occasions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-.occasion-item { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; position: relative; }
-.occasion-item:hover { border-color: #333; }
-.occasion-type { font-size: 0.9rem; color: #666; margin: 4px 0; }
-.edit-btn { position: absolute; top: 8px; right: 8px; background: none; border: none; font-size: 18px; cursor: pointer; }
-.gift-btn { margin-top: 12px; padding: 8px 12px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
-.add-btn { padding: 40px; border: 2px dashed #ccc; background: none; border-radius: 8px; cursor: pointer; }
-
-/* Fixed modal positioning to only apply when visible, not override display:none */
-.modal-overlay { 
-  position: fixed; 
-  top: 0; 
-  left: 0; 
-  width: 100vw; 
-  height: 100vh; 
-  background: rgba(0,0,0,0.6); 
-  align-items: center; 
-  justify-content: center; 
-  z-index: 9999;
-  backdrop-filter: blur(2px);
-}
-
-/* Only apply flex display when modal is actually shown */
-.modal-overlay[style*="flex"] {
-  display: flex !important;
-}
-
-.modal-content { 
-  background: white; 
-  border-radius: 12px; 
-  padding: 32px; 
-  max-width: 500px; 
-  width: 90%; 
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-  position: relative;
-  z-index: 10000;
-}
-
-.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.modal-header h3 { margin: 0; font-size: 1.5rem; }
-.modal-header button { background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px; }
-
-.greeting-box { background: #f8f8f8; padding: 20px; border-radius: 8px; margin-bottom: 24px; text-align: center; }
-.form-group { margin-bottom: 20px; }
-.form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
-.form-group input, .form-group select { 
-  width: 100%; 
-  padding: 16px; 
-  border: 2px solid #e5e5e5; 
-  border-radius: 8px; 
-  font-size: 16px;
-  transition: border-color 0.2s;
-}
-.form-group input:focus, .form-group select:focus {
-  outline: none;
-  border-color: #333;
-}
-
-.add-submit-btn, .save-btn, .delete-btn { 
-  padding: 16px 32px; 
-  border: none; 
-  border-radius: 8px; 
-  cursor: pointer; 
-  margin-right: 12px; 
-  font-size: 16px;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-.add-submit-btn, .save-btn { background: #333; color: white; }
-.add-submit-btn:hover, .save-btn:hover { background: #555; }
-.delete-btn { background: #dc3545; color: white; }
-.delete-btn:hover { background: #c82333; }
-.add-submit-btn:disabled { background: #ccc; cursor: not-allowed; }
-</style>
