@@ -3,7 +3,7 @@
 <div class="occasions-manager" id="occasions-manager-{{ block.id }}" data-api-url="{{ block.settings.api_url | escape }}">
 
   {% if customer %}
-    {%- comment -%} 1. OCCASION SUMMARY - Nicely formatted cards {%- comment -%}
+    {%- comment -%} 1. OCCASION SUMMARY - Nicely formatted cards {%- endcomment -%}
     <div class="occasions-card">
       <h3>{{ block.settings.display_heading | default: "My Occasions" }}</h3>
       
@@ -61,7 +61,7 @@
       </div>
     </div>
 
-    {%- comment -%} 2. ADD OCCASION POPUP FORM {%- comment -%}
+    {%- comment -%} 2. ADD OCCASION POPUP FORM {%- endcomment -%}
     <div class="modal-overlay" id="add-modal-{{ block.id }}" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
@@ -115,7 +115,7 @@
       </div>
     </div>
 
-    {%- comment -%} 3. EDIT OCCASION POPUP FORM {%- comment -%}
+    {%- comment -%} 3. EDIT OCCASION POPUP FORM {%- endcomment -%}
     <div class="modal-overlay" id="edit-modal-{{ block.id }}" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
@@ -160,7 +160,7 @@
   {% endif %}
 </div>
 
-{%- comment -%} 4. SCRIPT TO SORT CARDS AND HANDLE FORMS {%- comment -%}
+{%- comment -%} 4. SCRIPT TO SORT CARDS AND HANDLE FORMS {%- endcomment -%}
 <script>
 (function() {
   const blockId = '{{ block.id }}';
