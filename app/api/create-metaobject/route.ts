@@ -952,6 +952,10 @@ export async function POST(request: NextRequest) {
         success: true,
         metaobject: metaobject,
         operation: isUpdate ? "updated" : "created", // Include operation type in response
+        loyaltyPointsDebug: {
+          executed: true,
+          timestamp: new Date().toISOString(),
+        },
       },
       {
         headers: {
