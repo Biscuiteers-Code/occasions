@@ -379,19 +379,13 @@
         console.log('[v0] API URL:', '{{ block.settings.api_url }}');
         console.log('[v0] Payload:', payload);
         console.log('[v0] Headers:', {
-          'Content-Type': 'application/json',
-          'x-pressie-points-target': '{{ block.settings.pressie_points_target | default: 3 }}',
-          'x-pressie-points-value': '{{ block.settings.pressie_points_value | default: 5 }}',
-          'x-pressie-points-field': '{{ block.settings.pressie_points_field | default: "app--152217321473--loyalty_program.points" }}'
+          'Content-Type': 'application/json'
         });
 
         const response = await fetch('{{ block.settings.api_url }}', {
           method: 'POST',
           headers: { 
-            'Content-Type': 'application/json',
-            'x-pressie-points-target': '{{ block.settings.pressie_points_target | default: 3 }}',
-            'x-pressie-points-value': '{{ block.settings.pressie_points_value | default: 5 }}',
-            'x-pressie-points-field': '{{ block.settings.pressie_points_field | default: "app--152217321473--loyalty_program.points" }}'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify(payload)
         });
@@ -424,15 +418,6 @@
           throw new Error(`HTTP ${response.status}: ${responseData.error || 'Unknown error'}`);
         }
         
-        if (responseData.loyaltyPointsDebug) {
-          localStorage.setItem('loyaltyPointsDebug', JSON.stringify({
-            timestamp: new Date().toISOString(),
-            debug: responseData.loyaltyPointsDebug,
-            occasionCount: responseData.loyaltyPointsDebug.occasionCount,
-            pointsAwarded: responseData.loyaltyPointsDebug.pointsAwarded
-          }));
-          console.log('[v0] Loyalty points debug stored in localStorage');
-        }
         
         formMessageDiv.className = 'form-message success';
         formMessageDiv.textContent = 'Occasion added successfully!';

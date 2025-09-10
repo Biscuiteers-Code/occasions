@@ -12,8 +12,7 @@
       "blockId": "{{ block.id }}",
       "buttonLabel": "{{ block.settings.button_label | escape }}",
       "loginUrl": "{{ routes.storefront_login_url }}",
-      "defaultGiftUrl": "{{ block.settings.default_gift_url | escape }}",
-      "pressiePointsField": "{{ block.settings.pressie_points_field | escape }}"
+      "defaultGiftUrl": "{{ block.settings.default_gift_url | escape }}"
     }
   </script>
 
@@ -495,10 +494,6 @@ document.addEventListener('DOMContentLoaded', () => {
     { "type": "text", "id": "api_url", "label": "API URL", "default": "/api/create-metaobject" },
     { "type": "text", "id": "button_label", "label": "Button Label", "default": "Add" },
     { "type": "text", "id": "display_heading", "label": "Display Heading", "default": "My Occasions" },
-    { "type":"header","content":"Pressie Points Configuration" },
-    { "type":"number","id":"pressie_points_target","label":"Occasions Required for Points","default":3,"info":"Number of occasions needed to earn Pressie Points" },
-    { "type":"number","id":"pressie_points_value","label":"Points Value","default":5,"info":"Number of Pressie Points awarded when target is reached" },
-    { "type":"text","id":"pressie_points_field","label":"Pressie Points Metafield Reference","default":"app--152217321473--loyalty_program.points","info":"Metafield reference for customer loyalty points (e.g., app--152217321473--loyalty_program.points)" },
     { "type":"header","content":"Gift URLs by Occasion Type" },
     { "type":"text","id":"occasion_type_1","label":"Occasion Type 1","default":"Dad's Birthday","info":"Will be populated dynamically from metafield definition" },
     { "type":"url","id":"gift_url_1","label":"Gift URL 1","info":"Enter relative path like /collections/gifts or full URL" },

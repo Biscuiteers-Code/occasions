@@ -175,8 +175,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers":
-              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
+            "Access-Control-Allow-Headers": "Content-Type",
           },
         },
       )
@@ -197,8 +196,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers":
-              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
+            "Access-Control-Allow-Headers": "Content-Type",
           },
         },
       )
@@ -220,8 +218,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers":
-              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
+            "Access-Control-Allow-Headers": "Content-Type",
           },
         },
       )
@@ -242,8 +239,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers":
-              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
+            "Access-Control-Allow-Headers": "Content-Type",
           },
         },
       )
@@ -260,23 +256,13 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers":
-              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
+            "Access-Control-Allow-Headers": "Content-Type",
           },
         },
       )
     }
 
     console.log(`[v0] Successfully ${isUpdate ? "updated" : "created"} metaobject:`, metaobject.id)
-
-    const loyaltyPointsDebug = {
-      executed: false,
-      timestamp: new Date().toISOString(),
-      config: {},
-      conditions: {},
-      actions: {},
-      errors: [],
-    }
 
     if (!isUpdate) {
       try {
@@ -386,302 +372,8 @@ export async function POST(request: NextRequest) {
         } else {
           console.log("[v0] Successfully added metaobject to customer's occasions list")
         }
-
-        try {
-          console.log("[v0] Syncing customer occasion count after adding to list")
-
-          // Update no_occasions to match the new count
-          const newCount = existingOccasions.length
-          console.log("[v0] Updating no_occasions count to:", newCount)
-
-          const syncCountMutation = `
-            mutation customerUpdate($input: CustomerInput!) {
-              customerUpdate(input: $input) {
-                customer {
-                  id
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }
-          `
-
-          await fetch(apiUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Shopify-Access-Token": accessToken,
-              "User-Agent": "Shopify-Metaobject-App/1.0",
-            },
-            body: JSON.stringify({
-              query: syncCountMutation,
-              variables: {
-                input: {
-                  id: customerGid,
-                  metafields: [
-                    {
-                      namespace: "custom",
-                      key: "no_occasions",
-                      value: newCount.toString(),
-                      type: "number_integer",
-                    },
-                  ],
-                },
-              },
-            }),
-          })
-
-          console.log("[v0] Successfully synced no_occasions count to:", newCount)
-
-          try {
-            console.log("[v0] Checking loyalty points eligibility")
-
-            // Get pressie_points_target from request headers (passed from frontend)
-            const pressiePointsTarget = Number.parseInt(request.headers.get("x-pressie-points-target") || "3")
-            const pressiePointsValue = Number.parseInt(request.headers.get("x-pressie-points-value") || "5")
-            const pressiePointsField =
-              request.headers.get("x-pressie-points-field") || "app--152217321473--loyalty_program.points"
-
-            console.log(
-              "[v0] Loyalty config - Target:",
-              pressiePointsTarget,
-              "Value:",
-              pressiePointsValue,
-              "Field:",
-              pressiePointsField,
-            )
-
-            // Check if customer meets criteria for loyalty points
-            if (newCount >= pressiePointsTarget) {
-              console.log("[v0] ✅ Customer has reached target occasions, checking reward status")
-
-              const [namespace, key] = pressiePointsField.split(".")
-
-              console.log("[v0] Parsed metafield - Namespace:", namespace, "Key:", key)
-
-              // Check if customer has already received reward
-              const rewardCheckQuery = `
-                query getCustomerRewardStatus($customerId: ID!) {
-                  customer(id: $customerId) {
-                    occasionsReward: metafield(namespace: "custom", key: "occasions_reward") {
-                      value
-                    }
-                    loyaltyPoints: metafield(namespace: "${namespace}", key: "${key}") {
-                      value
-                    }
-                  }
-                }
-              `
-
-              console.log("[v0] Executing reward check query for customer:", customerGid)
-
-              const rewardResponse = await fetch(apiUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Shopify-Access-Token": accessToken,
-                  "User-Agent": "Shopify-Metaobject-App/1.0",
-                },
-                body: JSON.stringify({
-                  query: rewardCheckQuery,
-                  variables: { customerId: customerGid },
-                }),
-              })
-
-              const rewardResult = await rewardResponse.json()
-              console.log("[v0] Reward check response:", JSON.stringify(rewardResult, null, 2))
-
-              const customer = rewardResult.data?.customer
-
-              loyaltyPointsDebug.executed = true
-              loyaltyPointsDebug.config = {
-                target: pressiePointsTarget,
-                value: pressiePointsValue,
-                field: pressiePointsField,
-                namespace: pressiePointsField.split(".")[0],
-                key: pressiePointsField.split(".")[1],
-              }
-              loyaltyPointsDebug.conditions = {
-                currentOccasions: newCount,
-                targetMet: newCount >= pressiePointsTarget,
-              }
-
-              loyaltyPointsDebug.conditions.rewardCheckResponse = rewardResult
-              loyaltyPointsDebug.conditions.customerData = customer
-
-              let occasionsReward = false
-              try {
-                console.log("[v0] Raw occasions_reward value:", customer?.occasionsReward?.value)
-
-                if (customer?.occasionsReward?.value) {
-                  occasionsReward = customer.occasionsReward.value === "true"
-                  console.log("[v0] Parsed occasions_reward as:", occasionsReward)
-                } else {
-                  loyaltyPointsDebug.actions.setOccasionsRewardToFalse = true
-
-                  const setRewardFalseMutation = `
-                    mutation customerUpdate($input: CustomerInput!) {
-                      customerUpdate(input: $input) {
-                        customer {
-                          id
-                        }
-                        userErrors {
-                          field
-                          message
-                        }
-                      }
-                    }
-                  `
-
-                  const setFalseResponse = await fetch(apiUrl, {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "X-Shopify-Access-Token": accessToken,
-                      "User-Agent": "Shopify-Metaobject-App/1.0",
-                    },
-                    body: JSON.stringify({
-                      query: setRewardFalseMutation,
-                      variables: {
-                        input: {
-                          id: customerGid,
-                          metafields: [
-                            {
-                              namespace: "custom",
-                              key: "occasions_reward",
-                              value: "false",
-                              type: "boolean",
-                            },
-                          ],
-                        },
-                      },
-                    }),
-                  })
-
-                  const setFalseResult = await setFalseResponse.json()
-                  console.log("[v0] Set occasions_reward to false result:", JSON.stringify(setFalseResult, null, 2))
-
-                  loyaltyPointsDebug.actions.setFalseResult = setFalseResult
-                  occasionsReward = false
-                }
-              } catch (rewardCheckError) {
-                console.error("[v0] Error checking occasions_reward, treating as false:", rewardCheckError)
-                loyaltyPointsDebug.errors.push({ type: "rewardCheck", error: rewardCheckError.message })
-                occasionsReward = false
-              }
-
-              const currentPoints = Number.parseInt(customer?.loyaltyPoints?.value || "0")
-
-              loyaltyPointsDebug.conditions.occasionsReward = occasionsReward
-              loyaltyPointsDebug.conditions.currentPoints = currentPoints
-              loyaltyPointsDebug.conditions.shouldAwardPoints = !occasionsReward
-
-              console.log("[v0] Current reward status:", occasionsReward, "Current points:", currentPoints)
-              console.log("[v0] Should award points?", !occasionsReward)
-
-              // Award points if customer hasn't received reward yet
-              if (!occasionsReward) {
-                console.log("[v0] 🎉 AWARDING LOYALTY POINTS TO CUSTOMER")
-
-                const newPointsTotal = currentPoints + pressiePointsValue
-                console.log("[v0] Points calculation:", currentPoints, "+", pressiePointsValue, "=", newPointsTotal)
-
-                loyaltyPointsDebug.actions.pointsCalculation = {
-                  current: currentPoints,
-                  adding: pressiePointsValue,
-                  newTotal: newPointsTotal,
-                }
-
-                const awardPointsMutation = `
-                  mutation customerUpdate($input: CustomerInput!) {
-                    customerUpdate(input: $input) {
-                      customer {
-                        id
-                      }
-                      userErrors {
-                        field
-                        message
-                      }
-                    }
-                  }
-                `
-
-                console.log("[v0] Executing award points mutation...")
-
-                const awardResponse = await fetch(apiUrl, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "X-Shopify-Access-Token": accessToken,
-                    "User-Agent": "Shopify-Metaobject-App/1.0",
-                  },
-                  body: JSON.stringify({
-                    query: awardPointsMutation,
-                    variables: {
-                      input: {
-                        id: customerGid,
-                        metafields: [
-                          {
-                            namespace: namespace,
-                            key: key,
-                            value: newPointsTotal.toString(),
-                            type: "number_integer",
-                          },
-                          {
-                            namespace: "custom",
-                            key: "occasions_reward",
-                            value: "true",
-                            type: "boolean",
-                          },
-                        ],
-                      },
-                    },
-                  }),
-                })
-
-                const awardResult = await awardResponse.json()
-                console.log("[v0] Award points response:", JSON.stringify(awardResult, null, 2))
-
-                loyaltyPointsDebug.actions.awardResult = awardResult
-
-                if (awardResult.data?.customerUpdate?.userErrors?.length > 0) {
-                  console.error("[v0] ❌ Error awarding loyalty points:", awardResult.data.customerUpdate.userErrors)
-                  loyaltyPointsDebug.errors.push({
-                    type: "awardPoints",
-                    errors: awardResult.data.customerUpdate.userErrors,
-                  })
-                } else {
-                  console.log(
-                    "[v0] ✅ Successfully awarded",
-                    pressiePointsValue,
-                    "loyalty points. New total:",
-                    newPointsTotal,
-                  )
-                  loyaltyPointsDebug.actions.success = true
-                }
-              } else {
-                console.log("[v0] ❌ Customer has already received occasions reward")
-                loyaltyPointsDebug.actions.skipped = "Customer already received reward"
-              }
-            } else {
-              console.log("[v0] ❌ Customer has not yet reached target occasions for loyalty points")
-              loyaltyPointsDebug.actions.skipped = "Target occasions not met"
-            }
-            console.log("[v0] === LOYALTY POINTS DEBUG END ===")
-          } catch (loyaltyError) {
-            console.error("[v0] ❌ Error processing loyalty points:", loyaltyError)
-            loyaltyPointsDebug.errors.push({ type: "general", error: loyaltyError.message })
-            // Don't fail the whole request if loyalty points fail
-          }
-        } catch (syncError) {
-          console.error("[v0] Error syncing occasion count:", syncError)
-          // Don't fail the whole request if sync fails
-        }
       } catch (metafieldError) {
         console.error("[v0] Error updating customer metafield:", metafieldError)
-        // Don't fail the whole request if metafield update fails
       }
     } else {
       try {
@@ -789,264 +481,25 @@ export async function POST(request: NextRequest) {
           })
 
           console.log("[v0] Successfully synced no_occasions count to:", actualCount)
-
-          try {
-            console.log("[v0] Checking loyalty points eligibility for update")
-
-            const pressiePointsTarget = Number.parseInt(request.headers.get("x-pressie-points-target") || "3")
-            const pressiePointsValue = Number.parseInt(request.headers.get("x-pressie-points-value") || "5")
-            const pressiePointsField =
-              request.headers.get("x-pressie-points-field") || "app--152217321473--loyalty_program.points"
-
-            console.log(
-              "[v0] Loyalty config - Target:",
-              pressiePointsTarget,
-              "Value:",
-              pressiePointsValue,
-              "Field:",
-              pressiePointsField,
-            )
-
-            if (actualCount >= pressiePointsTarget) {
-              console.log("[v0] ✅ Customer has reached target occasions, checking reward status")
-
-              const [namespace, key] = pressiePointsField.split(".")
-
-              console.log("[v0] Parsed metafield - Namespace:", namespace, "Key:", key)
-
-              const rewardCheckQuery = `
-                query getCustomerRewardStatus($customerId: ID!) {
-                  customer(id: $customerId) {
-                    occasionsReward: metafield(namespace: "custom", key: "occasions_reward") {
-                      value
-                    }
-                    loyaltyPoints: metafield(namespace: "${namespace}", key: "${key}") {
-                      value
-                    }
-                  }
-                }
-              `
-
-              console.log("[v0] Executing reward check query for customer:", customerGid)
-
-              const rewardResponse = await fetch(apiUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Shopify-Access-Token": accessToken,
-                  "User-Agent": "Shopify-Metaobject-App/1.0",
-                },
-                body: JSON.stringify({
-                  query: rewardCheckQuery,
-                  variables: { customerId: customerGid },
-                }),
-              })
-
-              const rewardResult = await rewardResponse.json()
-              console.log("[v0] Reward check response:", JSON.stringify(rewardResult, null, 2))
-
-              loyaltyPointsDebug.executed = true
-              loyaltyPointsDebug.config = {
-                target: pressiePointsTarget,
-                value: pressiePointsValue,
-                field: pressiePointsField,
-                namespace: pressiePointsField.split(".")[0],
-                key: pressiePointsField.split(".")[1],
-              }
-              loyaltyPointsDebug.conditions = {
-                currentOccasions: actualCount,
-                targetMet: actualCount >= pressiePointsTarget,
-              }
-
-              loyaltyPointsDebug.conditions.rewardCheckResponse = rewardResult
-              loyaltyPointsDebug.conditions.customerData = rewardResult.data?.customer
-
-              const customer = rewardResult.data?.customer
-
-              let occasionsReward = false
-              try {
-                console.log("[v0] Raw occasions_reward value:", customer?.occasionsReward?.value)
-
-                if (customer?.occasionsReward?.value) {
-                  occasionsReward = customer.occasionsReward.value === "true"
-                  console.log("[v0] Parsed occasions_reward as:", occasionsReward)
-                } else {
-                  loyaltyPointsDebug.actions.setOccasionsRewardToFalse = true
-
-                  const setRewardFalseMutation = `
-                    mutation customerUpdate($input: CustomerInput!) {
-                      customerUpdate(input: $input) {
-                        customer {
-                          id
-                        }
-                        userErrors {
-                          field
-                          message
-                        }
-                      }
-                    }
-                  `
-
-                  const setFalseResponse = await fetch(apiUrl, {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "X-Shopify-Access-Token": accessToken,
-                      "User-Agent": "Shopify-Metaobject-App/1.0",
-                    },
-                    body: JSON.stringify({
-                      query: setRewardFalseMutation,
-                      variables: {
-                        input: {
-                          id: customerGid,
-                          metafields: [
-                            {
-                              namespace: "custom",
-                              key: "occasions_reward",
-                              value: "false",
-                              type: "boolean",
-                            },
-                          ],
-                        },
-                      },
-                    }),
-                  })
-
-                  const setFalseResult = await setFalseResponse.json()
-                  console.log("[v0] Set occasions_reward to false result:", JSON.stringify(setFalseResult, null, 2))
-
-                  loyaltyPointsDebug.actions.setFalseResult = setFalseResult
-                  occasionsReward = false
-                }
-              } catch (rewardCheckError) {
-                console.error("[v0] Error checking occasions_reward, treating as false:", rewardCheckError)
-                loyaltyPointsDebug.errors.push({ type: "rewardCheck", error: rewardCheckError.message })
-                occasionsReward = false
-              }
-
-              const currentPoints = Number.parseInt(customer?.loyaltyPoints?.value || "0")
-
-              loyaltyPointsDebug.conditions.occasionsReward = occasionsReward
-              loyaltyPointsDebug.conditions.currentPoints = currentPoints
-              loyaltyPointsDebug.conditions.shouldAwardPoints = !occasionsReward
-
-              console.log("[v0] Current reward status:", occasionsReward, "Current points:", currentPoints)
-              console.log("[v0] Should award points?", !occasionsReward)
-
-              // Award points if customer hasn't received reward yet
-              if (!occasionsReward) {
-                console.log("[v0] 🎉 AWARDING LOYALTY POINTS TO CUSTOMER")
-
-                const newPointsTotal = currentPoints + pressiePointsValue
-                console.log("[v0] Points calculation:", currentPoints, "+", pressiePointsValue, "=", newPointsTotal)
-
-                loyaltyPointsDebug.actions.pointsCalculation = {
-                  current: currentPoints,
-                  adding: pressiePointsValue,
-                  newTotal: newPointsTotal,
-                }
-
-                const awardPointsMutation = `
-                  mutation customerUpdate($input: CustomerInput!) {
-                    customerUpdate(input: $input) {
-                      customer {
-                        id
-                      }
-                      userErrors {
-                        field
-                        message
-                      }
-                    }
-                  }
-                `
-
-                console.log("[v0] Executing award points mutation...")
-
-                const awardResponse = await fetch(apiUrl, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "X-Shopify-Access-Token": accessToken,
-                    "User-Agent": "Shopify-Metaobject-App/1.0",
-                  },
-                  body: JSON.stringify({
-                    query: awardPointsMutation,
-                    variables: {
-                      input: {
-                        id: customerGid,
-                        metafields: [
-                          {
-                            namespace: namespace,
-                            key: key,
-                            value: newPointsTotal.toString(),
-                            type: "number_integer",
-                          },
-                          {
-                            namespace: "custom",
-                            key: "occasions_reward",
-                            value: "true",
-                            type: "boolean",
-                          },
-                        ],
-                      },
-                    },
-                  }),
-                })
-
-                const awardResult = await awardResponse.json()
-                console.log("[v0] Award points response:", JSON.stringify(awardResult, null, 2))
-
-                loyaltyPointsDebug.actions.awardResult = awardResult
-
-                if (awardResult.data?.customerUpdate?.userErrors?.length > 0) {
-                  console.error("[v0] ❌ Error awarding loyalty points:", awardResult.data.customerUpdate.userErrors)
-                  loyaltyPointsDebug.errors.push({
-                    type: "awardPoints",
-                    errors: awardResult.data.customerUpdate.userErrors,
-                  })
-                } else {
-                  console.log(
-                    "[v0] ✅ Successfully awarded",
-                    pressiePointsValue,
-                    "loyalty points. New total:",
-                    newPointsTotal,
-                  )
-                  loyaltyPointsDebug.actions.success = true
-                }
-              } else {
-                console.log("[v0] ❌ Customer has already received occasions reward")
-                loyaltyPointsDebug.actions.skipped = "Customer already received reward"
-              }
-            } else {
-              console.log("[v0] ❌ Customer has not yet reached target occasions for loyalty points")
-              loyaltyPointsDebug.actions.skipped = "Target occasions not met"
-            }
-            console.log("[v0] === LOYALTY POINTS DEBUG END ===")
-          } catch (loyaltyError) {
-            console.error("[v0] ❌ Error processing loyalty points:", loyaltyError)
-            loyaltyPointsDebug.errors.push({ type: "general", error: loyaltyError.message })
-            // Don't fail the whole request if loyalty points fail
-          }
         }
       } catch (syncError) {
-        console.error("[v0] Error syncing occasion count:", syncError)
-        // Don't fail the whole request if sync fails
+        console.error("[v0] Error syncing no_occasions:", syncError)
       }
     }
 
     return NextResponse.json(
       {
         success: true,
+        message: isUpdate ? "Metaobject updated successfully" : "Metaobject created successfully",
         metaobject: metaobject,
-        operation: isUpdate ? "updated" : "created", // Include operation type in response
-        loyaltyPointsDebug,
+        operation: isUpdate ? "updated" : "created",
       },
       {
+        status: 200,
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers":
-            "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
+          "Access-Control-Allow-Headers": "Content-Type",
         },
       },
     )
@@ -1064,8 +517,7 @@ export async function POST(request: NextRequest) {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers":
-            "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
+          "Access-Control-Allow-Headers": "Content-Type",
         },
       },
     )
@@ -1078,8 +530,7 @@ export async function OPTIONS(request: NextRequest) {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers":
-        "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
+      "Access-Control-Allow-Headers": "Content-Type",
     },
   })
 }
