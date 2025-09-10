@@ -1,0 +1,428 @@
+{% comment %} Add Occasion Form Snippet - Portalized {% endcomment %}
+
+<script>
+(function() {
+  const blockId = '{{ block.id }}';
+  const customerId = '{{ customer.id }}';
+  
+  // Create portalized modal function
+  function createAddModal() {
+    // Remove existing modal if it exists
+    const existingModal = document.getElementById(`modal-overlay-${blockId}`);
+    if (existingModal) existingModal.remove();
+    
+    const modalHTML = `
+      <div class="portal-modal-overlay" id="modal-overlay-${blockId}" style="display:none;">
+        <div class="modal-content" onclick="event.stopPropagation();">
+          <div class="modal-header">
+            <h3 class="modal-title">Add Occasion Reminder</h3>
+            <button class="modal-close" type="button" onclick="window[\'closeModal${blockId}\']();" aria-label="Close">
+              <svg class="icon-x" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <path d="M18 6 L6 18 M6 6 L18 18"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <form class="form-content" novalidate id="add-form-${blockId}">
+              <input type="hidden" class="customer-gid" value="gid://shopify/Customer/${customerId}" />
+
+              <div class="form-group">
+                <input type="date" class="event-date" required id="add-event-date-${blockId}" />
+              </div>
+
+              <div class="form-group">
+                <select class="occasion-type" required id="add-occasion-type-${blockId}">
+                  <option value="">Select occasion</option>
+                  {% if block.settings.occasion_type_1 != blank %}<option value="{{ block.settings.occasion_type_1 }}">{{ block.settings.occasion_type_1 }}</option>{% endif %}
+                  {% if block.settings.occasion_type_2 != blank %}<option value="{{ block.settings.occasion_type_2 }}">{{ block.settings.occasion_type_2 }}</option>{% endif %}
+                  {% if block.settings.occasion_type_3 != blank %}<option value="{{ block.settings.occasion_type_3 }}">{{ block.settings.occasion_type_3 }}</option>{% endif %}
+                  {% if block.settings.occasion_type_4 != blank %}<option value="{{ block.settings.occasion_type_4 }}">{{ block.settings.occasion_type_4 }}</option>{% endif %}
+                  {% if block.settings.occasion_type_5 != blank %}<option value="{{ block.settings.occasion_type_5 }}">{{ block.settings.occasion_type_5 }}</option>{% endif %}
+                  {% if block.settings.occasion_type_6 != blank %}<option value="{{ block.settings.occasion_type_6 }}">{{ block.settings.occasion_type_6 }}</option>{% endif %}
+                  {% if block.settings.occasion_type_7 != blank %}<option value="{{ block.settings.occasion_type_7 }}">{{ block.settings.occasion_type_7 }}</option>{% endif %}
+                  {% if block.settings.occasion_type_8 != blank %}<option value="{{ block.settings.occasion_type_8 }}">{{ block.settings.occasion_type_8 }}</option>{% endif %}
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div class="form-group other-group" hidden>
+                <input type="text" class="other-occasion field__input" placeholder="Specify the occasion" id="add-other-occasion-${blockId}" />
+              </div>
+
+              <div class="form-group">
+                <input type="text" class="occasion-name field__input" required placeholder="Enter the name of your reminder" id="add-occasion-name-${blockId}" />
+              </div>
+
+              <div class="modal-actions">
+                <button type="submit" class="button button-primary submit-btn">
+                  <span style="display: flex; align-items: center; gap: 8px; white-space: nowrap;">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                    </svg>
+                    <span class="btn-text">Add</span>
+                    <span class="btn-loading" hidden>Creating...</span>
+                  </span>
+                </button>
+              </div>
+            </form>
+
+            <div class="form-message" hidden></div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Append to document body (portalized)
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Add styles to document head
+    if (!document.getElementById(`portal-add-styles-${blockId}`)) {
+      const styles = `
+        <style id="portal-add-styles-${blockId}">
+        .portal-modal-overlay{
+          position:fixed !important; 
+          inset:0 !important;
+          background:var(--color-overlay, rgba(0,0,0,.5)) !important;
+          z-index:2147483647 !important;
+          align-items:center !important; 
+          justify-content:center !important;
+          padding:20px !important;
+          isolation:isolate !important;
+          pointer-events:auto !important;
+        }
+
+        .portal-modal-overlay[style*="display: flex"] {
+          display:flex !important;
+        }
+
+        .portal-modal-overlay .modal-content{
+          background:var(--color-background) !important;
+          color:var(--color-foreground) !important;
+          border-radius:var(--style-border-radius-card, 12px) !important;
+          max-width:520px !important; 
+          width:100% !important;
+          max-height:90vh !important; 
+          overflow-y:auto !important;
+          box-shadow:var(--shadow-card, 0 20px 40px rgba(0,0,0,.15)) !important;
+        }
+
+        .portal-modal-overlay .modal-header{
+          display:flex !important; 
+          justify-content:space-between !important; 
+          align-items:center !important;
+          padding:28px 28px 20px !important;
+          margin-bottom:0 !important;
+        }
+
+        .portal-modal-overlay .modal-title{
+          margin:0 !important; 
+          color:var(--color-foreground) !important;
+          font-family:var(--font-h3--family) !important;
+          font-style:var(--font-h3--style) !important;
+          font-weight:var(--font-h3--weight) !important;
+          font-size:var(--font-h3--size) !important;
+          line-height:var(--font-h3--line-height) !important;
+          letter-spacing:var(--font-h3--letter-spacing) !important;
+          text-transform:var(--font-h3--case) !important;
+        }
+
+        .portal-modal-overlay .modal-body{ 
+          padding:28px !important;
+        }
+
+        .portal-modal-overlay .form-content { 
+          margin-top:0 !important; 
+          padding:0 4px !important; 
+        }
+
+        .portal-modal-overlay .form-group{
+          display:flex !important; 
+          flex-direction:column !important;
+          margin-bottom:28px !important;
+        }
+
+        .portal-modal-overlay .form-group input,
+        .portal-modal-overlay .form-group select{
+          width:100% !important;
+          padding:18px 24px !important;
+          border:2px solid var(--color-border) !important;
+          border-radius:var(--style-border-radius-form-elements, 8px) !important;
+          background-color:var(--color-background) !important;
+          color:var(--color-foreground) !important;
+          font-size:1.05rem !important; 
+          line-height:1.4 !important;
+          transition:all .3s ease !important;
+          min-height:60px !important; 
+          box-sizing:border-box !important;
+        }
+
+        .portal-modal-overlay .form-group input.field__input {
+          border: 2px solid var(--color-border) !important;
+          outline: none !important;
+        }
+
+        .portal-modal-overlay .form-group input[type="text"].field__input {
+          border: 2px solid var(--color-border) !important;
+          outline: none !important;
+          box-shadow: none !important;
+        }
+
+        .portal-modal-overlay .form-group input:focus,
+        .portal-modal-overlay .form-group textarea:focus {
+          border-color: var(--color-primary-button-background, var(--color-accent, #007acc)) !important;
+          outline: none !important;
+          box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2) !important;
+        }
+
+        .portal-modal-overlay .form-group input[type="text"]:focus,
+        .portal-modal-overlay .form-group textarea:focus {
+          border-color: var(--color-primary-button-background, var(--color-accent, #007acc)) !important;
+          outline: none !important;
+          box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2) !important;
+        }
+
+        .portal-modal-overlay .form-group select option {
+          background-color: var(--color-background) !important;
+          color: var(--color-foreground) !important;
+          padding: 12px !important;
+        }
+
+        .portal-modal-overlay .form-group select option:checked,
+        .portal-modal-overlay .form-group select option:hover {
+          background-color: var(--color-primary-button-background, var(--color-accent, #007acc)) !important;
+          color: var(--color-primary-button-text, white) !important;
+        }
+
+        .portal-modal-overlay .form-group select:focus {
+          border-color: var(--color-primary-button-background, var(--color-accent, #007acc)) !important;
+          outline: none !important;
+          box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2) !important;
+        }
+
+        .portal-modal-overlay .modal-actions{
+          display:flex !important; 
+          gap:16px !important; 
+          margin-top:32px !important; 
+          padding-top:24px !important;
+          align-items:center !important; 
+          justify-content:flex-start !important;
+        }
+
+        .portal-modal-overlay .button{
+          font-family:var(--font-family-body) !important;
+          display:inline-flex !important; 
+          align-items:center !important; 
+          justify-content:center !important; 
+          gap:var(--spacing-2, 8px) !important;
+          color:var(--button-color) !important;
+          appearance: none !important;
+          background-color:var(--button-background-color) !important;
+          border: none !important;
+          font-family: var(--button-font-family-primary) !important;
+          font-weight: var(--button-font-weight-primary) !important;
+          text-transform: var(--button-text-case-primary) !important;
+          font-size: var(--font-paragraph--size) !important;
+          line-height: var(--font-paragraph--line-height) !important;
+          margin-block: 0 !important;
+          transition: color var(--animation-speed) var(--animation-easing),
+            box-shadow var(--animation-speed) var(--animation-easing),
+            background-color var(--animation-speed) var(--animation-easing) !important;
+          cursor: pointer !important;
+          width: fit-content !important;
+          box-shadow: inset 0 0 0 var(--button-border-width) var(--button-border-color) !important;
+          padding-block: var(--button-padding-block) !important;
+          padding-inline: var(--button-padding-inline) !important;
+          border-radius: var(--style-border-radius-buttons-primary) !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: var(--spacing-2, 8px) !important;
+          white-space: nowrap !important;
+          --button-color: var(--color-primary-button-text) !important;
+          --button-background-color: var(--color-primary-button-background) !important;
+          --button-border-color: var(--color-primary-button-border) !important;
+          --button-border-width: var(--style-border-width-primary) !important;
+        }
+
+        .portal-modal-overlay .button:hover {
+          --button-color: var(--color-primary-button-hover-text) !important;
+          --button-background-color: var(--color-primary-button-hover-background) !important;
+          --button-border-color: var(--color-primary-button-hover-border) !important;
+        }
+
+        .portal-modal-overlay .modal-close {
+          background: var(--color-background) !important;
+          border: 2px solid var(--color-border) !important;
+          border-radius: var(--style-border-radius-buttons-primary, 8px) !important;
+          width: 40px !important;
+          height: 40px !important;
+          padding: 8px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          cursor: pointer !important;
+          transition: all 0.2s ease !important;
+          color: var(--color-foreground) !important;
+        }
+
+        .portal-modal-overlay .modal-close:hover {
+          background: var(--color-accent, #f5f5f5) !important;
+          border-color: var(--color-foreground) !important;
+          transform: scale(1.05) !important;
+        }
+
+        .portal-modal-overlay .modal-close .icon-x {
+          stroke: currentColor !important;
+          stroke-width: 2 !important;
+          fill: none !important;
+          stroke-linecap: round !important;
+          stroke-linejoin: round !important;
+        }
+
+        .portal-modal-overlay .form-message{
+          margin-top:20px !important; 
+          padding:16px 20px !important; 
+          border-radius:8px !important;
+          text-align:center !important; 
+          font-size:.95rem !important;
+        }
+        .portal-modal-overlay .form-message.success{ 
+          background:#d4edda !important; 
+          color:#155724 !important; 
+          border:1px solid #c3e6cb !important; 
+        }
+        .portal-modal-overlay .form-message.error{ 
+          background:#f8d7da !important; 
+          color:#721c24 !important; 
+          border:1px solid #f5c6cb !important; 
+        }
+
+        .portal-modal-overlay .form-group.other-group[hidden] {
+          display: none !important;
+        }
+        </style>
+      `;
+      document.head.insertAdjacentHTML('beforeend', styles);
+    }
+    
+    attachFormEventListeners();
+  }
+  
+  function attachFormEventListeners() {
+    const form = document.getElementById(`add-form-${blockId}`);
+    if (!form) return;
+
+    const submitBtn = form.querySelector('.submit-btn');
+    const occasionTypeSelect = form.querySelector('.occasion-type');
+    const otherOccasionGroup = form.querySelector('.other-group');
+    const requiredFields = form.querySelectorAll('[required]');
+    const formMessageDiv = document.querySelector(`#modal-overlay-${blockId} .form-message`);
+
+    function validateForm() {
+      let isValid = true;
+      requiredFields.forEach(field => {
+        if (!field.value.trim()) isValid = false;
+      });
+      
+      if (occasionTypeSelect.value === 'Other') {
+        const otherInput = form.querySelector('.other-occasion');
+        if (!otherInput.value.trim()) isValid = false;
+      }
+      
+      submitBtn.disabled = !isValid;
+    }
+
+    function toggleOtherOccasionField() {
+      if (occasionTypeSelect.value === 'Other') {
+        otherOccasionGroup.hidden = false;
+        form.querySelector('.other-occasion').required = true;
+      } else {
+        otherOccasionGroup.hidden = true;
+        form.querySelector('.other-occasion').required = false;
+        form.querySelector('.other-occasion').value = '';
+      }
+      validateForm();
+    }
+
+    // Event listeners
+    requiredFields.forEach(field => {
+      field.addEventListener('input', validateForm);
+      field.addEventListener('change', validateForm);
+    });
+    
+    form.querySelector('.other-occasion').addEventListener('input', validateForm);
+    occasionTypeSelect.addEventListener('change', toggleOtherOccasionField);
+
+    toggleOtherOccasionField();
+
+    // Form submission
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const btnText = submitBtn.querySelector('.btn-text');
+      const btnLoading = submitBtn.querySelector('.btn-loading');
+      
+      submitBtn.disabled = true;
+      btnText.hidden = true;
+      btnLoading.hidden = false;
+      
+      const payload = {
+        customer: `gid://shopify/Customer/${customerId}`,
+        date: form.querySelector('.event-date').value,
+        type: form.querySelector('.occasion-type').value,
+        other_occasion: form.querySelector('.other-occasion').value,
+        occasion_name: form.querySelector('.occasion-name').value
+      };
+
+      try {
+        const response = await fetch('{{ block.settings.api_url }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        formMessageDiv.className = 'form-message success';
+        formMessageDiv.textContent = 'Occasion added successfully!';
+        formMessageDiv.hidden = false;
+        
+        setTimeout(() => {
+          window[`closeModal${blockId}`]();
+          location.reload();
+        }, 1500);
+        
+      } catch (err) {
+        formMessageDiv.className = 'form-message error';
+        formMessageDiv.textContent = `Error: ${err.message}`;
+        formMessageDiv.hidden = false;
+      } finally {
+        submitBtn.disabled = false;
+        btnText.hidden = false;
+        btnLoading.hidden = true;
+      }
+    });
+
+    validateForm();
+  }
+  
+  // Create modal immediately but keep it hidden for main block to find
+  createAddModal();
+  
+  window[`resetFormToAdd${blockId}`] = function() {
+    const form = document.getElementById(`add-form-${blockId}`);
+    if (form) {
+      form.reset();
+      const otherOccasionGroup = form.querySelector('.other-group');
+      if (otherOccasionGroup) {
+        otherOccasionGroup.hidden = true;
+        form.querySelector('.other-occasion').required = false;
+      }
+      const formMessageDiv = document.querySelector(`#modal-overlay-${blockId} .form-message`);
+      if (formMessageDiv) formMessageDiv.hidden = true;
+    }
+  };
+  
+})();
+</script>
