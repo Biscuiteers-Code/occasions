@@ -446,7 +446,7 @@ export async function POST(request: NextRequest) {
 
             // Check if customer meets criteria for loyalty points
             if (newCount >= pressiePointsTarget) {
-              console.log("[v0] Customer has reached target occasions, checking reward status")
+              console.log("[v0] ✅ Customer has reached target occasions, checking reward status")
 
               const [namespace, key] = pressiePointsField.split(".")
 
@@ -466,6 +466,8 @@ export async function POST(request: NextRequest) {
                 }
               `
 
+              console.log("[v0] Executing reward check query for customer:", customerGid)
+
               const rewardResponse = await fetch(apiUrl, {
                 method: "POST",
                 headers: {
@@ -480,12 +482,17 @@ export async function POST(request: NextRequest) {
               })
 
               const rewardResult = await rewardResponse.json()
+              console.log("[v0] Reward check response:", JSON.stringify(rewardResult, null, 2))
+
               const customer = rewardResult.data?.customer
 
               let occasionsReward = false
               try {
+                console.log("[v0] Raw occasions_reward value:", customer?.occasionsReward?.value)
+
                 if (customer?.occasionsReward?.value) {
                   occasionsReward = customer.occasionsReward.value === "true"
+                  console.log("[v0] Parsed occasions_reward as:", occasionsReward)
                 } else {
                   // If no value exists, set it to false
                   console.log("[v0] No occasions_reward value found, setting to false")
@@ -503,7 +510,7 @@ export async function POST(request: NextRequest) {
                     }
                   `
 
-                  await fetch(apiUrl, {
+                  const setFalseResponse = await fetch(apiUrl, {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -527,6 +534,9 @@ export async function POST(request: NextRequest) {
                       },
                     }),
                   })
+
+                  const setFalseResult = await setFalseResponse.json()
+                  console.log("[v0] Set occasions_reward to false result:", JSON.stringify(setFalseResult, null, 2))
                   occasionsReward = false
                 }
               } catch (rewardCheckError) {
@@ -537,12 +547,14 @@ export async function POST(request: NextRequest) {
               const currentPoints = Number.parseInt(customer?.loyaltyPoints?.value || "0")
 
               console.log("[v0] Current reward status:", occasionsReward, "Current points:", currentPoints)
+              console.log("[v0] Should award points?", !occasionsReward)
 
               // Award points if customer hasn't received reward yet
               if (!occasionsReward) {
-                console.log("[v0] Awarding loyalty points to customer")
+                console.log("[v0] 🎉 AWARDING LOYALTY POINTS TO CUSTOMER")
 
                 const newPointsTotal = currentPoints + pressiePointsValue
+                console.log("[v0] Points calculation:", currentPoints, "+", pressiePointsValue, "=", newPointsTotal)
 
                 const awardPointsMutation = `
                   mutation customerUpdate($input: CustomerInput!) {
@@ -557,6 +569,8 @@ export async function POST(request: NextRequest) {
                     }
                   }
                 `
+
+                console.log("[v0] Executing award points mutation...")
 
                 const awardResponse = await fetch(apiUrl, {
                   method: "POST",
@@ -590,25 +604,27 @@ export async function POST(request: NextRequest) {
                 })
 
                 const awardResult = await awardResponse.json()
+                console.log("[v0] Award points response:", JSON.stringify(awardResult, null, 2))
 
                 if (awardResult.data?.customerUpdate?.userErrors?.length > 0) {
-                  console.error("[v0] Error awarding loyalty points:", awardResult.data.customerUpdate.userErrors)
+                  console.error("[v0] ❌ Error awarding loyalty points:", awardResult.data.customerUpdate.userErrors)
                 } else {
                   console.log(
-                    "[v0] Successfully awarded",
+                    "[v0] ✅ Successfully awarded",
                     pressiePointsValue,
                     "loyalty points. New total:",
                     newPointsTotal,
                   )
                 }
               } else {
-                console.log("[v0] Customer has already received occasions reward")
+                console.log("[v0] ❌ Customer has already received occasions reward")
               }
             } else {
-              console.log("[v0] Customer has not yet reached target occasions for loyalty points")
+              console.log("[v0] ❌ Customer has not yet reached target occasions for loyalty points")
             }
+            console.log("[v0] === LOYALTY POINTS DEBUG END ===")
           } catch (loyaltyError) {
-            console.error("[v0] Error processing loyalty points:", loyaltyError)
+            console.error("[v0] ❌ Error processing loyalty points:", loyaltyError)
             // Don't fail the whole request if loyalty points fail
           }
         } catch (syncError) {
@@ -744,7 +760,7 @@ export async function POST(request: NextRequest) {
             )
 
             if (actualCount >= pressiePointsTarget) {
-              console.log("[v0] Customer has reached target occasions, checking reward status")
+              console.log("[v0] ✅ Customer has reached target occasions, checking reward status")
 
               const [namespace, key] = pressiePointsField.split(".")
 
@@ -763,6 +779,8 @@ export async function POST(request: NextRequest) {
                 }
               `
 
+              console.log("[v0] Executing reward check query for customer:", customerGid)
+
               const rewardResponse = await fetch(apiUrl, {
                 method: "POST",
                 headers: {
@@ -777,12 +795,17 @@ export async function POST(request: NextRequest) {
               })
 
               const rewardResult = await rewardResponse.json()
+              console.log("[v0] Reward check response:", JSON.stringify(rewardResult, null, 2))
+
               const customer = rewardResult.data?.customer
 
               let occasionsReward = false
               try {
+                console.log("[v0] Raw occasions_reward value:", customer?.occasionsReward?.value)
+
                 if (customer?.occasionsReward?.value) {
                   occasionsReward = customer.occasionsReward.value === "true"
+                  console.log("[v0] Parsed occasions_reward as:", occasionsReward)
                 } else {
                   // If no value exists, set it to false
                   console.log("[v0] No occasions_reward value found, setting to false")
@@ -800,7 +823,7 @@ export async function POST(request: NextRequest) {
                     }
                   `
 
-                  await fetch(apiUrl, {
+                  const setFalseResponse = await fetch(apiUrl, {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -824,6 +847,9 @@ export async function POST(request: NextRequest) {
                       },
                     }),
                   })
+
+                  const setFalseResult = await setFalseResponse.json()
+                  console.log("[v0] Set occasions_reward to false result:", JSON.stringify(setFalseResult, null, 2))
                   occasionsReward = false
                 }
               } catch (rewardCheckError) {
@@ -834,11 +860,14 @@ export async function POST(request: NextRequest) {
               const currentPoints = Number.parseInt(customer?.loyaltyPoints?.value || "0")
 
               console.log("[v0] Current reward status:", occasionsReward, "Current points:", currentPoints)
+              console.log("[v0] Should award points?", !occasionsReward)
 
+              // Award points if customer hasn't received reward yet
               if (!occasionsReward) {
-                console.log("[v0] Awarding loyalty points to customer")
+                console.log("[v0] 🎉 AWARDING LOYALTY POINTS TO CUSTOMER")
 
                 const newPointsTotal = currentPoints + pressiePointsValue
+                console.log("[v0] Points calculation:", currentPoints, "+", pressiePointsValue, "=", newPointsTotal)
 
                 const awardPointsMutation = `
                   mutation customerUpdate($input: CustomerInput!) {
@@ -853,6 +882,8 @@ export async function POST(request: NextRequest) {
                     }
                   }
                 `
+
+                console.log("[v0] Executing award points mutation...")
 
                 const awardResponse = await fetch(apiUrl, {
                   method: "POST",
@@ -886,29 +917,29 @@ export async function POST(request: NextRequest) {
                 })
 
                 const awardResult = await awardResponse.json()
+                console.log("[v0] Award points response:", JSON.stringify(awardResult, null, 2))
 
                 if (awardResult.data?.customerUpdate?.userErrors?.length > 0) {
-                  console.error("[v0] Error awarding loyalty points:", awardResult.data.customerUpdate.userErrors)
+                  console.error("[v0] ❌ Error awarding loyalty points:", awardResult.data.customerUpdate.userErrors)
                 } else {
                   console.log(
-                    "[v0] Successfully awarded",
+                    "[v0] ✅ Successfully awarded",
                     pressiePointsValue,
                     "loyalty points. New total:",
                     newPointsTotal,
                   )
                 }
               } else {
-                console.log("[v0] Customer has already received occasions reward")
+                console.log("[v0] ❌ Customer has already received occasions reward")
               }
             } else {
-              console.log("[v0] Customer has not yet reached target occasions for loyalty points")
+              console.log("[v0] ❌ Customer has not yet reached target occasions for loyalty points")
             }
+            console.log("[v0] === LOYALTY POINTS DEBUG END ===")
           } catch (loyaltyError) {
-            console.error("[v0] Error processing loyalty points:", loyaltyError)
+            console.error("[v0] ❌ Error processing loyalty points:", loyaltyError)
             // Don't fail the whole request if loyalty points fail
           }
-        } else {
-          console.log("[v0] Counts already match, no sync needed")
         }
       } catch (syncError) {
         console.error("[v0] Error syncing occasion count:", syncError)
