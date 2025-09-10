@@ -269,6 +269,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Successfully ${isUpdate ? "updated" : "created"} metaobject:`, metaobject.id)
 
+    const loyaltyPointsDebug = {
+      executed: false,
+      timestamp: new Date().toISOString(),
+      config: {},
+      conditions: {},
+      actions: {},
+      errors: [],
+    }
+
     if (!isUpdate) {
       try {
         console.log("[v0] Adding metaobject to customer's my_occasions list")
@@ -486,6 +495,22 @@ export async function POST(request: NextRequest) {
 
               const customer = rewardResult.data?.customer
 
+              loyaltyPointsDebug.executed = true
+              loyaltyPointsDebug.config = {
+                target: pressiePointsTarget,
+                value: pressiePointsValue,
+                field: pressiePointsField,
+                namespace: pressiePointsField.split(".")[0],
+                key: pressiePointsField.split(".")[1],
+              }
+              loyaltyPointsDebug.conditions = {
+                currentOccasions: newCount,
+                targetMet: newCount >= pressiePointsTarget,
+              }
+
+              loyaltyPointsDebug.conditions.rewardCheckResponse = rewardResult
+              loyaltyPointsDebug.conditions.customerData = customer
+
               let occasionsReward = false
               try {
                 console.log("[v0] Raw occasions_reward value:", customer?.occasionsReward?.value)
@@ -494,8 +519,8 @@ export async function POST(request: NextRequest) {
                   occasionsReward = customer.occasionsReward.value === "true"
                   console.log("[v0] Parsed occasions_reward as:", occasionsReward)
                 } else {
-                  // If no value exists, set it to false
-                  console.log("[v0] No occasions_reward value found, setting to false")
+                  loyaltyPointsDebug.actions.setOccasionsRewardToFalse = true
+
                   const setRewardFalseMutation = `
                     mutation customerUpdate($input: CustomerInput!) {
                       customerUpdate(input: $input) {
@@ -537,14 +562,21 @@ export async function POST(request: NextRequest) {
 
                   const setFalseResult = await setFalseResponse.json()
                   console.log("[v0] Set occasions_reward to false result:", JSON.stringify(setFalseResult, null, 2))
+
+                  loyaltyPointsDebug.actions.setFalseResult = setFalseResult
                   occasionsReward = false
                 }
               } catch (rewardCheckError) {
                 console.error("[v0] Error checking occasions_reward, treating as false:", rewardCheckError)
+                loyaltyPointsDebug.errors.push({ type: "rewardCheck", error: rewardCheckError.message })
                 occasionsReward = false
               }
 
               const currentPoints = Number.parseInt(customer?.loyaltyPoints?.value || "0")
+
+              loyaltyPointsDebug.conditions.occasionsReward = occasionsReward
+              loyaltyPointsDebug.conditions.currentPoints = currentPoints
+              loyaltyPointsDebug.conditions.shouldAwardPoints = !occasionsReward
 
               console.log("[v0] Current reward status:", occasionsReward, "Current points:", currentPoints)
               console.log("[v0] Should award points?", !occasionsReward)
@@ -555,6 +587,12 @@ export async function POST(request: NextRequest) {
 
                 const newPointsTotal = currentPoints + pressiePointsValue
                 console.log("[v0] Points calculation:", currentPoints, "+", pressiePointsValue, "=", newPointsTotal)
+
+                loyaltyPointsDebug.actions.pointsCalculation = {
+                  current: currentPoints,
+                  adding: pressiePointsValue,
+                  newTotal: newPointsTotal,
+                }
 
                 const awardPointsMutation = `
                   mutation customerUpdate($input: CustomerInput!) {
@@ -606,8 +644,14 @@ export async function POST(request: NextRequest) {
                 const awardResult = await awardResponse.json()
                 console.log("[v0] Award points response:", JSON.stringify(awardResult, null, 2))
 
+                loyaltyPointsDebug.actions.awardResult = awardResult
+
                 if (awardResult.data?.customerUpdate?.userErrors?.length > 0) {
                   console.error("[v0] ❌ Error awarding loyalty points:", awardResult.data.customerUpdate.userErrors)
+                  loyaltyPointsDebug.errors.push({
+                    type: "awardPoints",
+                    errors: awardResult.data.customerUpdate.userErrors,
+                  })
                 } else {
                   console.log(
                     "[v0] ✅ Successfully awarded",
@@ -615,16 +659,20 @@ export async function POST(request: NextRequest) {
                     "loyalty points. New total:",
                     newPointsTotal,
                   )
+                  loyaltyPointsDebug.actions.success = true
                 }
               } else {
                 console.log("[v0] ❌ Customer has already received occasions reward")
+                loyaltyPointsDebug.actions.skipped = "Customer already received reward"
               }
             } else {
               console.log("[v0] ❌ Customer has not yet reached target occasions for loyalty points")
+              loyaltyPointsDebug.actions.skipped = "Target occasions not met"
             }
             console.log("[v0] === LOYALTY POINTS DEBUG END ===")
           } catch (loyaltyError) {
             console.error("[v0] ❌ Error processing loyalty points:", loyaltyError)
+            loyaltyPointsDebug.errors.push({ type: "general", error: loyaltyError.message })
             // Don't fail the whole request if loyalty points fail
           }
         } catch (syncError) {
@@ -797,6 +845,22 @@ export async function POST(request: NextRequest) {
               const rewardResult = await rewardResponse.json()
               console.log("[v0] Reward check response:", JSON.stringify(rewardResult, null, 2))
 
+              loyaltyPointsDebug.executed = true
+              loyaltyPointsDebug.config = {
+                target: pressiePointsTarget,
+                value: pressiePointsValue,
+                field: pressiePointsField,
+                namespace: pressiePointsField.split(".")[0],
+                key: pressiePointsField.split(".")[1],
+              }
+              loyaltyPointsDebug.conditions = {
+                currentOccasions: actualCount,
+                targetMet: actualCount >= pressiePointsTarget,
+              }
+
+              loyaltyPointsDebug.conditions.rewardCheckResponse = rewardResult
+              loyaltyPointsDebug.conditions.customerData = rewardResult.data?.customer
+
               const customer = rewardResult.data?.customer
 
               let occasionsReward = false
@@ -807,8 +871,8 @@ export async function POST(request: NextRequest) {
                   occasionsReward = customer.occasionsReward.value === "true"
                   console.log("[v0] Parsed occasions_reward as:", occasionsReward)
                 } else {
-                  // If no value exists, set it to false
-                  console.log("[v0] No occasions_reward value found, setting to false")
+                  loyaltyPointsDebug.actions.setOccasionsRewardToFalse = true
+
                   const setRewardFalseMutation = `
                     mutation customerUpdate($input: CustomerInput!) {
                       customerUpdate(input: $input) {
@@ -850,14 +914,21 @@ export async function POST(request: NextRequest) {
 
                   const setFalseResult = await setFalseResponse.json()
                   console.log("[v0] Set occasions_reward to false result:", JSON.stringify(setFalseResult, null, 2))
+
+                  loyaltyPointsDebug.actions.setFalseResult = setFalseResult
                   occasionsReward = false
                 }
               } catch (rewardCheckError) {
                 console.error("[v0] Error checking occasions_reward, treating as false:", rewardCheckError)
+                loyaltyPointsDebug.errors.push({ type: "rewardCheck", error: rewardCheckError.message })
                 occasionsReward = false
               }
 
               const currentPoints = Number.parseInt(customer?.loyaltyPoints?.value || "0")
+
+              loyaltyPointsDebug.conditions.occasionsReward = occasionsReward
+              loyaltyPointsDebug.conditions.currentPoints = currentPoints
+              loyaltyPointsDebug.conditions.shouldAwardPoints = !occasionsReward
 
               console.log("[v0] Current reward status:", occasionsReward, "Current points:", currentPoints)
               console.log("[v0] Should award points?", !occasionsReward)
@@ -868,6 +939,12 @@ export async function POST(request: NextRequest) {
 
                 const newPointsTotal = currentPoints + pressiePointsValue
                 console.log("[v0] Points calculation:", currentPoints, "+", pressiePointsValue, "=", newPointsTotal)
+
+                loyaltyPointsDebug.actions.pointsCalculation = {
+                  current: currentPoints,
+                  adding: pressiePointsValue,
+                  newTotal: newPointsTotal,
+                }
 
                 const awardPointsMutation = `
                   mutation customerUpdate($input: CustomerInput!) {
@@ -919,8 +996,14 @@ export async function POST(request: NextRequest) {
                 const awardResult = await awardResponse.json()
                 console.log("[v0] Award points response:", JSON.stringify(awardResult, null, 2))
 
+                loyaltyPointsDebug.actions.awardResult = awardResult
+
                 if (awardResult.data?.customerUpdate?.userErrors?.length > 0) {
                   console.error("[v0] ❌ Error awarding loyalty points:", awardResult.data.customerUpdate.userErrors)
+                  loyaltyPointsDebug.errors.push({
+                    type: "awardPoints",
+                    errors: awardResult.data.customerUpdate.userErrors,
+                  })
                 } else {
                   console.log(
                     "[v0] ✅ Successfully awarded",
@@ -928,16 +1011,20 @@ export async function POST(request: NextRequest) {
                     "loyalty points. New total:",
                     newPointsTotal,
                   )
+                  loyaltyPointsDebug.actions.success = true
                 }
               } else {
                 console.log("[v0] ❌ Customer has already received occasions reward")
+                loyaltyPointsDebug.actions.skipped = "Customer already received reward"
               }
             } else {
               console.log("[v0] ❌ Customer has not yet reached target occasions for loyalty points")
+              loyaltyPointsDebug.actions.skipped = "Target occasions not met"
             }
             console.log("[v0] === LOYALTY POINTS DEBUG END ===")
           } catch (loyaltyError) {
             console.error("[v0] ❌ Error processing loyalty points:", loyaltyError)
+            loyaltyPointsDebug.errors.push({ type: "general", error: loyaltyError.message })
             // Don't fail the whole request if loyalty points fail
           }
         }
@@ -952,10 +1039,7 @@ export async function POST(request: NextRequest) {
         success: true,
         metaobject: metaobject,
         operation: isUpdate ? "updated" : "created", // Include operation type in response
-        loyaltyPointsDebug: {
-          executed: true,
-          timestamp: new Date().toISOString(),
-        },
+        loyaltyPointsDebug,
       },
       {
         headers: {

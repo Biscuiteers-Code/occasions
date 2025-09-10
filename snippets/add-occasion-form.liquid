@@ -399,10 +399,39 @@
         console.log('[v0] Response status:', response.status);
         console.log('[v0] Response ok:', response.ok);
         
+        console.log('[v0] Response headers:', Object.fromEntries(response.headers.entries()));
+        console.log('[v0] Response content-type:', response.headers.get('content-type'));
+        
+        let responseData;
+        try {
+          const responseText = await response.text();
+          console.log('[v0] Raw response text:', responseText);
+          
+          if (responseText) {
+            responseData = JSON.parse(responseText);
+            console.log('[v0] Parsed response data:', responseData);
+          } else {
+            console.log('[v0] Empty response body');
+            responseData = {};
+          }
+        } catch (parseError) {
+          console.log('[v0] JSON parse error:', parseError);
+          responseData = {};
+        }
+        
         if (!response.ok) {
-          const errorText = await response.text();
-          console.log('[v0] Error response:', errorText);
-          throw new Error(`HTTP ${response.status}: ${errorText}`);
+          console.log('[v0] Error response:', responseData);
+          throw new Error(`HTTP ${response.status}: ${responseData.error || 'Unknown error'}`);
+        }
+        
+        if (responseData.loyaltyPointsDebug) {
+          localStorage.setItem('loyaltyPointsDebug', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            debug: responseData.loyaltyPointsDebug,
+            occasionCount: responseData.loyaltyPointsDebug.occasionCount,
+            pointsAwarded: responseData.loyaltyPointsDebug.pointsAwarded
+          }));
+          console.log('[v0] Loyalty points debug stored in localStorage');
         }
         
         formMessageDiv.className = 'form-message success';
