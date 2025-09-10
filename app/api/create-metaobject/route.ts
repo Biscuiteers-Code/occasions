@@ -443,6 +443,10 @@ export async function POST(request: NextRequest) {
             if (newCount >= pressiePointsTarget) {
               console.log("[v0] Customer has reached target occasions, checking reward status")
 
+              const [namespace, key] = pressiePointsField.split(".")
+
+              console.log("[v0] Parsed metafield - Namespace:", namespace, "Key:", key)
+
               // Check if customer has already received reward
               const rewardCheckQuery = `
                 query getCustomerRewardStatus($customerId: ID!) {
@@ -450,7 +454,7 @@ export async function POST(request: NextRequest) {
                     occasionsReward: metafield(namespace: "custom", key: "occasions_reward") {
                       value
                     }
-                    loyaltyPoints: metafield(namespace: "${pressiePointsField.split(".")[0]}", key: "${pressiePointsField.split(".")[1]}") {
+                    loyaltyPoints: metafield(namespace: "${namespace}", key: "${key}") {
                       value
                     }
                   }
@@ -534,7 +538,6 @@ export async function POST(request: NextRequest) {
                 console.log("[v0] Awarding loyalty points to customer")
 
                 const newPointsTotal = currentPoints + pressiePointsValue
-                const [namespace, key] = pressiePointsField.split(".")
 
                 const awardPointsMutation = `
                   mutation customerUpdate($input: CustomerInput!) {
@@ -738,13 +741,17 @@ export async function POST(request: NextRequest) {
             if (actualCount >= pressiePointsTarget) {
               console.log("[v0] Customer has reached target occasions, checking reward status")
 
+              const [namespace, key] = pressiePointsField.split(".")
+
+              console.log("[v0] Parsed metafield - Namespace:", namespace, "Key:", key)
+
               const rewardCheckQuery = `
                 query getCustomerRewardStatus($customerId: ID!) {
                   customer(id: $customerId) {
                     occasionsReward: metafield(namespace: "custom", key: "occasions_reward") {
                       value
                     }
-                    loyaltyPoints: metafield(namespace: "${pressiePointsField.split(".")[0]}", key: "${pressiePointsField.split(".")[1]}") {
+                    loyaltyPoints: metafield(namespace: "${namespace}", key: "${key}") {
                       value
                     }
                   }
@@ -827,7 +834,6 @@ export async function POST(request: NextRequest) {
                 console.log("[v0] Awarding loyalty points to customer")
 
                 const newPointsTotal = currentPoints + pressiePointsValue
-                const [namespace, key] = pressiePointsField.split(".")
 
                 const awardPointsMutation = `
                   mutation customerUpdate($input: CustomerInput!) {
