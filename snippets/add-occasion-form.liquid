@@ -376,13 +376,34 @@
       };
 
       try {
+        console.log('[v0] API URL:', '{{ block.settings.api_url }}');
+        console.log('[v0] Payload:', payload);
+        console.log('[v0] Headers:', {
+          'Content-Type': 'application/json',
+          'x-pressie-points-target': '{{ block.settings.pressie_points_target | default: 3 }}',
+          'x-pressie-points-value': '{{ block.settings.pressie_points_value | default: 5 }}',
+          'x-pressie-points-field': '{{ block.settings.pressie_points_field | default: "app--152217321473--loyalty_program.points" }}'
+        });
+
         const response = await fetch('{{ block.settings.api_url }}', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-pressie-points-target': '{{ block.settings.pressie_points_target | default: 3 }}',
+            'x-pressie-points-value': '{{ block.settings.pressie_points_value | default: 5 }}',
+            'x-pressie-points-field': '{{ block.settings.pressie_points_field | default: "app--152217321473--loyalty_program.points" }}'
+          },
           body: JSON.stringify(payload)
         });
         
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        console.log('[v0] Response status:', response.status);
+        console.log('[v0] Response ok:', response.ok);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log('[v0] Error response:', errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
         
         formMessageDiv.className = 'form-message success';
         formMessageDiv.textContent = 'Occasion added successfully!';
@@ -394,6 +415,7 @@
         }, 1500);
         
       } catch (err) {
+        console.log('[v0] Fetch error:', err);
         formMessageDiv.className = 'form-message error';
         formMessageDiv.textContent = `Error: ${err.message}`;
         formMessageDiv.hidden = false;

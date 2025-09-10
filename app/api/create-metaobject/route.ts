@@ -175,7 +175,8 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Headers":
+              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
           },
         },
       )
@@ -196,7 +197,8 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Headers":
+              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
           },
         },
       )
@@ -218,7 +220,8 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Headers":
+              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
           },
         },
       )
@@ -239,7 +242,8 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Headers":
+              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
           },
         },
       )
@@ -256,7 +260,8 @@ export async function POST(request: NextRequest) {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Headers":
+              "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
           },
         },
       )
@@ -921,7 +926,8 @@ export async function POST(request: NextRequest) {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Headers":
+            "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
         },
       },
     )
@@ -939,7 +945,8 @@ export async function POST(request: NextRequest) {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Headers":
+            "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
         },
       },
     )
@@ -952,7 +959,8 @@ export async function OPTIONS(request: NextRequest) {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers":
+        "Content-Type, x-pressie-points-target, x-pressie-points-value, x-pressie-points-field",
     },
   })
 }
