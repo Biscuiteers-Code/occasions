@@ -365,7 +365,6 @@ export async function POST(request: NextRequest) {
         existingOccasions.push(metaobject.id)
         console.log("[v0] Updated occasions list:", existingOccasions)
 
-        // Update the customer metafield with the combined list
         const updateMetafieldMutation = `
           mutation customerUpdate($input: CustomerInput!) {
             customerUpdate(input: $input) {
@@ -403,6 +402,12 @@ export async function POST(request: NextRequest) {
                     value: JSON.stringify(existingOccasions),
                     type: "list.metaobject_reference",
                   },
+                  {
+                    namespace: "custom",
+                    key: "no_occasions",
+                    value: existingOccasions.length.toString(),
+                    type: "number_integer",
+                  },
                 ],
               },
             },
@@ -415,7 +420,10 @@ export async function POST(request: NextRequest) {
         if (updateResult.data?.customerUpdate?.userErrors?.length > 0) {
           console.error("[v0] Customer metafield update errors:", updateResult.data.customerUpdate.userErrors)
         } else {
-          console.log("[v0] Successfully added metaobject to customer's occasions list")
+          console.log(
+            "[v0] Successfully added metaobject to customer's occasions list and updated count to:",
+            existingOccasions.length,
+          )
         }
       } catch (metafieldError) {
         console.error("[v0] Error updating customer metafield:", metafieldError)
