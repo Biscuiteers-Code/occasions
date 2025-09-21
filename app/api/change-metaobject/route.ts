@@ -380,6 +380,19 @@ export async function OPTIONS(request: NextRequest) {
 
 function extractDDMM(dateString: string): string {
   try {
+    console.log("[v0] Extracting DDMM from date:", dateString)
+
+    const isoPattern = /(\d{4})-(\d{1,2})-(\d{1,2})/
+    const isoMatch = dateString.match(isoPattern)
+
+    if (isoMatch) {
+      const day = isoMatch[3].padStart(2, "0")
+      const month = isoMatch[2].padStart(2, "0")
+      const result = day + month
+      console.log("[v0] ISO format - Day:", day, "Month:", month, "Result:", result)
+      return result
+    }
+
     // Handle various date formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
     const datePattern = /(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/
     const match = dateString.match(datePattern)
@@ -387,7 +400,9 @@ function extractDDMM(dateString: string): string {
     if (match) {
       const day = match[1].padStart(2, "0")
       const month = match[2].padStart(2, "0")
-      return day + month
+      const result = day + month
+      console.log("[v0] Standard format - Day:", day, "Month:", month, "Result:", result)
+      return result
     }
 
     console.log("[v0] Could not extract DDMM from date:", dateString)
