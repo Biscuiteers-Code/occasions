@@ -193,6 +193,34 @@
   padding:0;
 }
 
+/* Added responsive breakpoints for mobile grid layout */
+@media (max-width: 1024px) {
+  .occasions-manager .occasions-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .occasions-manager .occasions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .occasions-manager .occasions-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .occasions-manager .occasion-item,
+  .occasions-manager .add-occasion-item {
+    min-width: unset;
+    width: 100%;
+  }
+}
+
 .occasions-manager .occasion-item{
   background:var(--color-background);
   border:1px solid var(--color-border);

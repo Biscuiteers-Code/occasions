@@ -14,6 +14,26 @@ interface CustomerEventData {
   occasion_name: string
 }
 
+function extractDDMM(dateString: string): string {
+  try {
+    // Handle various date formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+    const datePattern = /(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/
+    const match = dateString.match(datePattern)
+
+    if (match) {
+      const day = match[1].padStart(2, "0")
+      const month = match[2].padStart(2, "0")
+      return day + month
+    }
+
+    console.log("[v0] Could not extract DDMM from date:", dateString)
+    return ""
+  } catch (error) {
+    console.error("[v0] Error extracting DDMM:", error)
+    return ""
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const eventData: CustomerEventData = await request.json()
@@ -105,6 +125,10 @@ export async function POST(request: NextRequest) {
                 value: eventData.date,
               },
               {
+                key: "ddmm",
+                value: extractDDMM(eventData.date),
+              },
+              {
                 key: "type",
                 value: eventData.type,
               },
@@ -130,6 +154,10 @@ export async function POST(request: NextRequest) {
               {
                 key: "date",
                 value: eventData.date,
+              },
+              {
+                key: "ddmm",
+                value: extractDDMM(eventData.date),
               },
               {
                 key: "type",

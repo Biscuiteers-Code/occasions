@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
         metaobject: {
           fields: [
             { key: "date", value: date },
+            { key: "ddmm", value: extractDDMM(date) },
             { key: "type", value: type },
             { key: "occasion_name", value: occasion_name },
             { key: "other_occasion", value: other_occasion || "" },
@@ -375,4 +376,24 @@ export async function OPTIONS(request: NextRequest) {
       "Access-Control-Allow-Headers": "Content-Type, Accept",
     },
   })
+}
+
+function extractDDMM(dateString: string): string {
+  try {
+    // Handle various date formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+    const datePattern = /(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/
+    const match = dateString.match(datePattern)
+
+    if (match) {
+      const day = match[1].padStart(2, "0")
+      const month = match[2].padStart(2, "0")
+      return day + month
+    }
+
+    console.log("[v0] Could not extract DDMM from date:", dateString)
+    return ""
+  } catch (error) {
+    console.error("[v0] Error extracting DDMM:", error)
+    return ""
+  }
 }
