@@ -16,13 +16,30 @@ interface CustomerEventData {
 
 function extractDDMM(dateString: string): string {
   try {
-    // Handle various date formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
-    const datePattern = /(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/
+    console.log("[v0] Extracting DDMM from date:", dateString)
+
+    let day = ""
+    let month = ""
+
+    // Handle ISO format: YYYY-MM-DD (e.g., "1986-05-25")
+    const isoPattern = /(\d{4})-(\d{1,2})-(\d{1,2})/
+    const isoMatch = dateString.match(isoPattern)
+
+    if (isoMatch) {
+      day = isoMatch[3].padStart(2, "0") // day
+      month = isoMatch[2].padStart(2, "0") // month
+      console.log("[v0] Parsed ISO format - day:", day, "month:", month)
+      return day + month
+    }
+
+    // Handle other formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+    const datePattern = /(\d{1,2})[/\-.](\d{1,2})[/\-.]\d{4}/
     const match = dateString.match(datePattern)
 
     if (match) {
-      const day = match[1].padStart(2, "0")
-      const month = match[2].padStart(2, "0")
+      day = match[1].padStart(2, "0")
+      month = match[2].padStart(2, "0")
+      console.log("[v0] Parsed standard format - day:", day, "month:", month)
       return day + month
     }
 
