@@ -27,9 +27,9 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 // Point this at your deployed Vercel app (no trailing slash).
 const API_BASE = "https://your-app.vercel.app"
 
-// Optional shared secret. If you add auth to the API routes (recommended for mobile),
-// send it here and validate it server-side. Leave empty to disable.
-const API_SECRET = ""
+// Shared secret. Must match OCCASIONS_API_KEY set in the Vercel project env vars.
+// The API routes now require this; requests without a matching key get a 401.
+const API_KEY = ""
 
 const OCCASION_TYPE_META = { type: "customer_event", field: "type" }
 
@@ -56,7 +56,7 @@ function toNumericMetaobjectId(id) {
 
 function apiHeaders() {
   const headers = { "Content-Type": "application/json" }
-  if (API_SECRET) headers["x-api-secret"] = API_SECRET
+  if (API_KEY) headers["x-api-key"] = API_KEY
   return headers
 }
 

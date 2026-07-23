@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { checkApiKey, corsHeaders } from "@/lib/api-auth"
 
 // You'll need to add these environment variables to your Vercel project:
 // SHOPIFY_STORE_URL - Your Shopify store URL (e.g., your-store.myshopify.com)
@@ -52,6 +53,9 @@ function extractDDMM(dateString: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const unauthorized = checkApiKey(request)
+  if (unauthorized) return unauthorized
+
   try {
     const eventData: CustomerEventData = await request.json()
 
@@ -580,10 +584,6 @@ export async function POST(request: NextRequest) {
 export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
     status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
+    headers: corsHeaders,
   })
 }
