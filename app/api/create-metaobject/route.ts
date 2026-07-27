@@ -60,7 +60,10 @@ export async function POST(request: NextRequest) {
     const eventData: CustomerEventData = await request.json()
 
     if (!eventData.customer || !eventData.date || !eventData.type || !eventData.occasion_name) {
-      return NextResponse.json({ error: "Customer, date, type, and occasion name are required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Customer, date, type, and occasion name are required" },
+        { status: 400, headers: corsHeaders },
+      )
     }
 
     const shopifyUrl = process.env.SHOPIFY_STORE_URL
@@ -76,7 +79,10 @@ export async function POST(request: NextRequest) {
         "Domain:",
         !!storeDomain,
       )
-      return NextResponse.json({ error: "Shopify configuration missing" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Shopify configuration missing" },
+        { status: 500, headers: corsHeaders },
+      )
     }
 
     const apiUrl = `https://${storeDomain}.myshopify.com/admin/api/2025-01/graphql.json`
