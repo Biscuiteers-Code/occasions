@@ -9,6 +9,9 @@ Customers save occasion reminders (birthdays, anniversaries). Each reminder is a
 **You do not need Shopify API access.** All Shopify logic lives behind 4 REST endpoints
 on our Vercel app. You only build UI + `fetch` calls.
 
+**Status:** all 4 endpoints are live in production and verified working. Nothing is
+blocked — you can start building immediately.
+
 ---
 
 ## 1. Setup
@@ -36,6 +39,18 @@ const customerGid = `gid://shopify/Customer/${numericId}`
 
 Tapcart gives you the customer via `useVariables()`. Normalise whatever shape it returns
 into the GID format above.
+
+**Smoke test** — run this first to confirm your key works before writing any UI:
+
+```bash
+curl -X POST https://v0-shopify-metaobject-app.vercel.app/api/get-metaobject-definition \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_KEY" \
+  -d '{"type":"customer_event","field":"type"}'
+```
+
+A working key returns a `choices` array of 9 occasion types. A `401` means the key is
+wrong or missing.
 
 ---
 
@@ -199,7 +214,9 @@ year roll to the end.
 
 ### Greeting message
 
-Target is **3** occasions, worth **5** Pressie Points. Using the saved count:
+Target is **3** occasions, worth **5** Pressie Points. Use `occasions.length` from
+`get-occasions` as the count — do not read the customer's `no_occasions` metafield, which
+can lag behind:
 
 - `0` → `Hi {firstName}, add 3 occasion reminders and earn 5 Pressie Points.`
 - `< 3` → `Hi {firstName}, add {3 - count} more occasion reminders and earn 5 Pressie Points.`
@@ -216,9 +233,20 @@ the theme editor; for the app either hardcode a per-type map or default everythi
 ## 5. Reference implementation
 
 `tapcart/OccasionsBlock.jsx` in this repo is a working React starting point covering all
-four calls, the ID normalisation, the ordinal date formatting, and the sort order. It has
-not been run against a real Tapcart workspace, so treat it as a reference rather than
-finished code. Set `API_BASE` and `API_KEY` at the top before using it.
+four calls, the ID normalisation, the ordinal date formatting, and the sort order. It
+loads the occasions and the type dropdown in parallel on mount, so it already picks up the
+dynamic `choices` list described in section 4.
+
+Two placeholders must be set at the top of the file before it will run:
+
+```js
+const API_BASE = "https://your-app.vercel.app"  // -> the base URL from section 1
+const API_KEY  = ""                             // -> ask Matt for the key
+```
+
+It has not been run against a real Tapcart workspace, so treat it as a reference rather
+than finished code. In particular, verify the shape of the customer object returned by
+`useVariables()` in `getCustomerGid()` — that is the most likely thing to need adjusting.
 
 ---
 
