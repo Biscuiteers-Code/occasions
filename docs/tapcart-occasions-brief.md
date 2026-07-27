@@ -158,18 +158,32 @@ ID everywhere for consistency.
 `type` is `"Other"`, `other_occasion` becomes required. When the user switches away from
 `"Other"`, clear the field and hide it.
 
-**Occasion types** — hardcode this list (see gotcha 6.1):
+**Occasion types** — fetch these at load time from:
 
 ```
-Dad's Birthday
-Mum's Birthday
-Family Birthday
-Friend's Birthday
-Anniversary
-Mother's Day
-Father's Day
-Other
+POST /api/get-metaobject-definition
+{ "type": "customer_event", "field": "type" }
 ```
+
+Response:
+
+```json
+{
+  "choices": ["Anniversary", "Dad's Birthday", "Easter", "Family Birthday",
+              "Father's Day", "Friend's Birthday", "Mother's Day",
+              "Mum's Birthday", "Other"],
+  "choicesSource": "derived"
+}
+```
+
+Populate the dropdown from `choices`, preserving the order returned (already
+alphabetical). Keep the list above as a hardcoded fallback if the call fails, so the form
+still works offline or on error.
+
+`choicesSource` tells you where the list came from and needs no handling in the app — it
+is `"derived"` today, meaning the values were collected from occasions customers have
+already saved, and will switch to `"definition"` if we later add a formal choice list in
+Shopify. See 6.1.
 
 ### List view
 
@@ -210,20 +224,21 @@ finished code. Set `API_BASE` and `API_KEY` at the top before using it.
 
 ## 6. Known issues
 
-**6.1 — `get-metaobject-definition` is broken.** There is a fourth endpoint intended to
-return the occasion type list dynamically, but our Shopify access token lacks the
-`read_metaobject_definitions` scope, so it currently returns:
+**6.1 — The type list is derived, not authoritative.** The `type` field is a plain text
+field in Shopify with no formal choice list, so `get-metaobject-definition` returns the
+distinct values already in use across saved occasions. Two consequences:
 
-```
-Access denied for metaobjectDefinitions field.
-```
+- A genuinely new type cannot appear in the dropdown until someone has saved one.
+- Typos and one-offs will surface. `"Easter"` currently appears from a single record and
+  may not be a real category — check with Matt before showing it prominently.
 
-Hardcode the type list for now. We may fix the scope later, at which point you could
-switch to `POST /api/get-metaobject-definition` with
-`{ "type": "customer_event", "field": "type" }`.
+If we later add a proper choice list in Shopify, the endpoint returns that instead and
+`choicesSource` flips to `"definition"`. No app change needed either way.
 
-**6.2 — `type` values must match exactly.** They are a fixed choice list in Shopify.
-`"Mum's Birthday"` works; `"mums birthday"` will be rejected. Note the apostrophes.
+**6.2 — `type` values are not validated by Shopify.** Because the field is free text,
+there is nothing stopping a mismatched value being written, and a typo becomes a new
+dropdown entry for everyone. Always submit a value exactly as returned in `choices`,
+apostrophes included — send `"Mum's Birthday"`, never `"mums birthday"`.
 
 **6.3 — Some occasions are orphaned.** A handful of older `customer_event` records were
 never added to their customer's `my_occasions` list, so `get-occasions` won't return them.
