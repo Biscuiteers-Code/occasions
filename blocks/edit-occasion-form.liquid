@@ -3,6 +3,7 @@
 <div class="my-occasions-display"
      id="my-occasions-display-{{ block.id | default: section.id }}"
      data-api-url="{{ cfg.api_url | escape }}"
+     data-api-key="{{ cfg.api_key | escape }}"
      data-customer-gid="{% if customer %}gid://shopify/Customer/{{ customer.id }}{% endif %}"
      data-block="my-occasions-display"
      {{ block.shopify_attributes }}>
@@ -73,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ta = document.createElement('textarea'); ta.innerHTML = endpointRaw;
     const endpoint = ta.value.trim();
     const customerGid = (root.dataset.customerGid || '').trim();
+    const apiKey = (root.dataset.apiKey || '').trim();
 
     const giftJsonEl = root.querySelector('script.gift-urls-json');
     const giftUrls = giftJsonEl ? JSON.parse(giftJsonEl.textContent || '{}') : {};
@@ -134,9 +136,13 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const r = await fetch(url, {
           method:'POST',
-          headers:{'Content-Type':'application/json','Accept':'application/json'},
+          headers:{'Content-Type':'application/json','Accept':'application/json','x-api-key':apiKey},
           body: JSON.stringify({ customer: customerGid })
         });
+        if (r.status === 401) {
+          showMessage('error','Occasions service rejected the request. Check the API Key in this block\'s settings.');
+          return;
+        }
         const data = r.ok ? await r.json() : {};
         const list = Array.isArray(data.occasions) ? data.occasions : [];
 
@@ -183,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
   "name": "My Occasions (block)",
   "settings": [
     { "type":"text","id":"heading","label":"Heading","default":"Occasion Reminders" },
+    { "type":"text","id":"api_key","label":"API Key","info":"Must match OCCASIONS_API_KEY in the Vercel project. Note: this is visible in page source." },
     { "type":"text","id":"api_url","label":"API endpoint URL",
       "default":"https://v0-shopify-metaobject-app.vercel.app/api/create-metaobject"
     },
