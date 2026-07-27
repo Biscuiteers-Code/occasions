@@ -1,0 +1,209 @@
+{% comment %} My Occasions — HORIZON BLOCK {% endcomment %}
+{% assign cfg = block.settings | default: section.settings %}
+<div class="my-occasions-display"
+     id="my-occasions-display-{{ block.id | default: section.id }}"
+     data-api-url="{{ cfg.api_url | escape }}"
+     data-api-key="{{ cfg.api_key | escape }}"
+     data-customer-gid="{% if customer %}gid://shopify/Customer/{{ customer.id }}{% endif %}"
+     data-block="my-occasions-display"
+     {{ block.shopify_attributes }}>
+
+  {% if customer %}
+    <div class="occasions-card">
+      <h3 class="h5">{{ cfg.heading }}</h3>
+
+      <div class="occasions-grid" id="occasions-grid-{{ block.id | default: section.id }}">
+        <div class="loading-message">Loading your occasions...</div>
+      </div>
+
+      <div class="occasions-message" hidden></div>
+    </div>
+
+    {%- comment -%} Gift URLs provided to JS as JSON (no Liquid inside {% javascript %}) {%- endcomment -%}
+    <script type="application/json" class="gift-urls-json">
+    {
+      "Dad's Birthday": {{ cfg.dads_birthday_url | json }},
+      "Mum's Birthday": {{ cfg.mums_birthday_url | json }},
+      "Family Birthday": {{ cfg.family_birthday_url | json }},
+      "Friend's Birthday": {{ cfg.friends_birthday_url | json }},
+      "Anniversary": {{ cfg.anniversary_url | json }},
+      "Mother's Day": {{ cfg.mothers_day_url | json }},
+      "Father's Day": {{ cfg.fathers_day_url | json }},
+      "Easter": {{ cfg.easter_url | json }},
+      "Other": {{ cfg.other_url | json }}
+    }
+    </script>
+  {% else %}
+    <div class="login-required">
+      <h5>Please log in to view your occasions</h5>
+      <p><a href={{ routes.account_login_url }}>Log in to your account</a></p>
+    </div>
+  {% endif %}
+</div>
+
+{% stylesheet %}
+.my-occasions-display{max-width:800px;margin:0 auto}
+.my-occasions-display .occasions-card{background:#fff;border-radius:8px;padding:24px}
+.my-occasions-display .occasions-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.my-occasions-display .occasion-item{border:1px solid #e5e5e5;border-radius:8px;padding:16px;position:relative}
+.my-occasions-display .occasion-item .occasion-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.my-occasions-display .occasion-item .occasion-name{font-weight:600;font-size:16px;margin:0}
+.my-occasions-display .occasion-item .occasion-date{color:#666;font-size:14px;margin:4px 0 12px 0}
+.my-occasions-display .occasion-item .edit-btn{background:none;border:1px solid #ddd;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:12px;color:#666}
+.my-occasions-display .occasion-item .edit-btn:hover{background:#f5f5f5}
+.my-occasions-display .occasion-item .gift-btn{width:100%;padding:12px;background:var(--color-button,#e91e63);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:500}
+.my-occasions-display .occasion-item .gift-btn:hover{opacity:.9}
+.my-occasions-display .add-occasion-item{border:2px dashed #ddd;border-radius:8px;padding:32px;text-align:center;display:flex;align-items:center;justify-content:center}
+.my-occasions-display .add-occasion-btn{background:none;border:1px solid var(--color-button,#e91e63);color:var(--color-button,#e91e63);padding:12px 24px;border-radius:6px;cursor:pointer;font-weight:500}
+.my-occasions-display .add-occasion-btn:hover{background:var(--color-button,#e91e63);color:#fff}
+.my-occasions-display .occasions-message{margin-top:16px;padding:12px;border-radius:6px;text-align:center}
+.my-occasions-display .occasions-message.success{background:#d4edda;color:#155724}
+.my-occasions-display .occasions-message.error{background:#f8d7da;color:#721c24}
+.my-occasions-display .loading-message{grid-column:1/-1;text-align:center;padding:40px;color:#666}
+@media (max-width:600px){.my-occasions-display .occasions-grid{grid-template-columns:1fr}}
+{% endstylesheet %}
+
+{% javascript %}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-block="my-occasions-display"]').forEach((root) => {
+    const grid = root.querySelector('.occasions-grid');
+    const messageDiv = root.querySelector('.occasions-message');
+
+    // Block settings (passed via data / JSON)
+    const endpointRaw = (root.dataset.apiUrl || '').trim();
+    const ta = document.createElement('textarea'); ta.innerHTML = endpointRaw;
+    const endpoint = ta.value.trim();
+    const customerGid = (root.dataset.customerGid || '').trim();
+    const apiKey = (root.dataset.apiKey || '').trim();
+
+    const giftJsonEl = root.querySelector('script.gift-urls-json');
+    const giftUrls = giftJsonEl ? JSON.parse(giftJsonEl.textContent || '{}') : {};
+
+    function showMessage(type, text){
+      messageDiv.className = `occasions-message ${type}`;
+      messageDiv.textContent = text;
+      messageDiv.hidden = false;
+    }
+
+    function formatDate(s){
+      const d = new Date(s);
+      const day = d.getDate();
+      const month = d.toLocaleDateString('en-GB',{month:'long'});
+      const suf = (n)=> (n%10==1&&n%100!=11)?'st':(n%10==2&&n%100!=12)?'nd':(n%10==3&&n%100!=13)?'rd':'th';
+      return `${day}${suf(day)} ${month}`;
+    }
+
+    function createOccasionItem(o){
+      const item = document.createElement('div');
+      item.className = 'occasion-item';
+      item.dataset.occasionId = o.id;
+      const giftUrl = giftUrls[o.occasion_type] || giftUrls["Other"] || '#';
+      const when = formatDate(o.date);
+      item.innerHTML = `
+        <div class="occasion-header">
+          <div>
+            <h4 class="occasion-name">${o.occasion_name}</h4>
+            <p class="occasion-date">${when}</p>
+          </div>
+          <button class="edit-btn" onclick="editOccasion('${o.id}', ${JSON.stringify(o).replace(/"/g,'&quot;')})">⋯</button>
+        </div>
+        <button class="gift-btn" onclick="window.location.href='${giftUrl}'">Find a gift for ${when}</button>
+      `;
+      return item;
+    }
+
+    function createAddOccasionItem(){
+      const el = document.createElement('div');
+      el.className = 'add-occasion-item';
+      el.innerHTML = `<button class="add-occasion-btn" onclick="scrollToAddForm()">add an occasion</button>`;
+      return el;
+    }
+
+    async function loadOccasions(){
+      if (!/^https?:\/\//i.test(endpoint)) {
+        showMessage('error','API endpoint must be a full https:// URL in block settings.');
+        return;
+      }
+      if (!customerGid) {
+        showMessage('error','Please log in to view your occasions.');
+        return;
+      }
+
+      // Derive base from create-metaobject URL
+      const base = endpoint.replace(/\/api\/create-metaobject\/?$/,'');
+      const url = `${base}/api/get-occasions`;
+
+      try{
+        const r = await fetch(url, {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Accept':'application/json','x-api-key':apiKey},
+          body: JSON.stringify({ customer: customerGid })
+        });
+        if (r.status === 401) {
+          showMessage('error','Occasions service rejected the request. Check the API Key in this block\'s settings.');
+          return;
+        }
+        const data = r.ok ? await r.json() : {};
+        const list = Array.isArray(data.occasions) ? data.occasions : [];
+
+        grid.innerHTML = '';
+        list.forEach(o => grid.appendChild(createOccasionItem(o)));
+        grid.appendChild(createAddOccasionItem());
+        if (!list.length) showMessage('info','No occasions found. Add your first occasion below!');
+      } catch(err){
+        console.error('[occasions] load error', err);
+        showMessage('error','Failed to load occasions. Please try again.');
+      }
+    }
+
+    // Helpers for the edit/create flow with the form block
+    window.editOccasion = function(id, data){
+      const formBlock = document.querySelector('[data-block="customer-event-form"]');
+      if (formBlock) {
+        formBlock.scrollIntoView({behavior:'smooth'});
+        setTimeout(()=>{ if(window.populateFormForEdit){ window.populateFormForEdit(data); }}, 400);
+      } else {
+        showMessage('error','Form block not found on this page.');
+      }
+    };
+
+    window.scrollToAddForm = function(){
+      const formBlock = document.querySelector('[data-block="customer-event-form"]');
+      if (formBlock) {
+        if (window.clearFormToCreateMode) window.clearFormToCreateMode();
+        formBlock.scrollIntoView({behavior:'smooth'});
+      } else {
+        showMessage('error','Form block not found on this page.');
+      }
+    };
+
+    window.refreshOccasionsDisplay = function(){ loadOccasions(); };
+
+    loadOccasions();
+  });
+});
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "My Occasions (block)",
+  "settings": [
+    { "type":"text","id":"heading","label":"Heading","default":"Occasion Reminders" },
+    { "type":"text","id":"api_key","label":"API Key","info":"Must match OCCASIONS_API_KEY in the Vercel project. Note: this is visible in page source." },
+    { "type":"text","id":"api_url","label":"API endpoint URL",
+      "default":"https://v0-shopify-metaobject-app.vercel.app/api/create-metaobject"
+    },
+    { "type":"header","content":"Gift URLs by Occasion Type" },
+    { "type":"url","id":"dads_birthday_url","label":"Dad's Birthday URL" },
+    { "type":"url","id":"mums_birthday_url","label":"Mum's Birthday URL" },
+    { "type":"url","id":"family_birthday_url","label":"Family Birthday URL" },
+    { "type":"url","id":"friends_birthday_url","label":"Friend's Birthday URL" },
+    { "type":"url","id":"anniversary_url","label":"Anniversary URL" },
+    { "type":"url","id":"mothers_day_url","label":"Mother's Day URL" },
+    { "type":"url","id":"fathers_day_url","label":"Father's Day URL" },
+    { "type":"url","id":"easter_url","label":"Easter URL" },
+    { "type":"url","id":"other_url","label":"Other Occasions URL" }
+  ],
+  "presets": [{ "name": "MyOccassions List" , "category": "Occasions"}]
+}
+{% endschema %}

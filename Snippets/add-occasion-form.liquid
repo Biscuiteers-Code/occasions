@@ -378,14 +378,13 @@
       try {
         console.log('[v0] API URL:', '{{ block.settings.api_url }}');
         console.log('[v0] Payload:', payload);
-        console.log('[v0] Headers:', {
-          'Content-Type': 'application/json'
-        });
+        console.log('[v0] API key present:', Boolean('{{ block.settings.api_key }}'));
 
         const response = await fetch('{{ block.settings.api_url }}', {
           method: 'POST',
           headers: { 
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'x-api-key': '{{ block.settings.api_key }}'
           },
           body: JSON.stringify(payload)
         });

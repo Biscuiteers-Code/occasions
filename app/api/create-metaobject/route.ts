@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { checkApiKey, corsHeaders } from "@/lib/api-auth"
 
 // You'll need to add these environment variables to your Vercel project:
 // SHOPIFY_STORE_URL - Your Shopify store URL (e.g., your-store.myshopify.com)
@@ -52,11 +53,17 @@ function extractDDMM(dateString: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const unauthorized = checkApiKey(request)
+  if (unauthorized) return unauthorized
+
   try {
     const eventData: CustomerEventData = await request.json()
 
     if (!eventData.customer || !eventData.date || !eventData.type || !eventData.occasion_name) {
-      return NextResponse.json({ error: "Customer, date, type, and occasion name are required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Customer, date, type, and occasion name are required" },
+        { status: 400, headers: corsHeaders },
+      )
     }
 
     const shopifyUrl = process.env.SHOPIFY_STORE_URL
@@ -72,7 +79,10 @@ export async function POST(request: NextRequest) {
         "Domain:",
         !!storeDomain,
       )
-      return NextResponse.json({ error: "Shopify configuration missing" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Shopify configuration missing" },
+        { status: 500, headers: corsHeaders },
+      )
     }
 
     const apiUrl = `https://${storeDomain}.myshopify.com/admin/api/2025-01/graphql.json`
@@ -580,10 +590,6 @@ export async function POST(request: NextRequest) {
 export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
     status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
+    headers: corsHeaders,
   })
 }
