@@ -294,7 +294,10 @@
       try {
         const response = await fetch('{{ block.settings.api_url }}', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': '{{ block.settings.api_key }}'
+          },
           body: JSON.stringify(payload)
         });
         
@@ -457,7 +460,10 @@
       const deleteEndpoint = '{{ block.settings.api_url }}'.replace('/api/create-metaobject', '/api/change-metaobject');
       const response = await fetch(deleteEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': '{{ block.settings.api_key }}'
+        },
         body: JSON.stringify({ 
           operation: 'delete',
           id: occasionIdInput.value, 
