@@ -187,11 +187,73 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log("[v0] Extracted choices:", choices)
+    console.log("[v0] Extracted choices from definition:", choices)
+
+    // The field may be a plain text field with no `choices` validation, in which
+    // case Shopify has no canonical list to return. Fall back to deriving the
+    // distinct values already in use across existing metaobjects of this type.
+    let choicesSource = "definition"
+
+    if (choices.length === 0) {
+      console.log("[v0] No choices validation on field, deriving from existing metaobjects")
+      choicesSource = "derived"
+
+      const derivedQuery = `
+        query getExistingValues($type: String!) {
+          metaobjects(type: $type, first: 250) {
+            edges {
+              node {
+                fields {
+                  key
+                  value
+                }
+              }
+            }
+          }
+        }
+      `
+
+      try {
+        const derivedResponse = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+          },
+          body: JSON.stringify({ query: derivedQuery, variables: { type } }),
+        })
+
+        if (derivedResponse.ok) {
+          const derivedData = await derivedResponse.json()
+
+          if (derivedData.errors) {
+            console.error("[v0] GraphQL errors deriving choices:", derivedData.errors)
+          } else {
+            const edges = derivedData.data?.metaobjects?.edges || []
+            const seen = new Set<string>()
+
+            for (const edge of edges) {
+              const match = (edge?.node?.fields || []).find((f) => f.key === field)
+              const value = (match?.value || "").trim()
+              if (value) seen.add(value)
+            }
+
+            choices = Array.from(seen).sort((a, b) => a.localeCompare(b))
+            console.log("[v0] Derived choices from", edges.length, "metaobjects:", choices)
+          }
+        } else {
+          console.error("[v0] Failed to derive choices:", derivedResponse.status)
+        }
+      } catch (deriveError) {
+        // A failure here should not break the endpoint, it just means no choices
+        console.error("[v0] Error deriving choices:", deriveError)
+      }
+    }
 
     return NextResponse.json(
       {
         choices,
+        choicesSource,
         fieldDefinition: occasionField,
       },
       {
