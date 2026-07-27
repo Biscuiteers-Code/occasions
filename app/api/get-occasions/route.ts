@@ -37,19 +37,29 @@ export async function POST(request: NextRequest) {
     const apiUrl = `https://${storeDomain}.myshopify.com/admin/api/2025-01/graphql.json`
     console.log("[v0] API URL:", apiUrl)
 
-    // GraphQL query to get customer metaobjects
+    // Read the occasions from the customer's custom.my_occasions metafield.
+    // It is a list.metaobject_reference, so `references` resolves the linked
+    // customer_event metaobjects directly. There is no customer.metaobjects
+    // field on the Admin API, so the references connection is the only way in.
     const query = `
-      query getCustomerMetaobjects($customer: ID!) {
+      query getCustomerOccasions($customer: ID!) {
         customer(id: $customer) {
           id
-          metaobjects(first: 50, type: "customer_event") {
-            edges {
-              node {
-                id
-                handle
-                fields {
-                  key
-                  value
+          metafield(namespace: "custom", key: "my_occasions") {
+            id
+            value
+            references(first: 50) {
+              edges {
+                node {
+                  ... on Metaobject {
+                    id
+                    handle
+                    type
+                    fields {
+                      key
+                      value
+                    }
+                  }
                 }
               }
             }
@@ -58,8 +68,13 @@ export async function POST(request: NextRequest) {
       }
     `
 
+    // Accept either a full GID or a bare numeric id from the client
+    const customerGid = String(customer).startsWith("gid://")
+      ? String(customer)
+      : `gid://shopify/Customer/${String(customer).replace(/\D/g, "")}`
+
     const variables = {
-      customer: customer,
+      customer: customerGid,
     }
 
     console.log("[v0] GraphQL query:", query)
@@ -108,28 +123,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Parse metaobjects from response
+    // Parse the resolved metaobject references from the customer metafield
     const customerData = responseData.data?.customer
-    const metaobjects = customerData?.metaobjects?.edges || []
 
-    const occasions = metaobjects.map((edge) => {
-      const metaobject = edge.node
-      const fields = {}
+    if (!customerData) {
+      console.log("[v0] Customer not found:", customerGid)
+      return NextResponse.json({ error: "Customer not found" }, { status: 404, headers: corsHeaders })
+    }
 
-      // Convert fields array to object
-      metaobject.fields.forEach((field) => {
-        fields[field.key] = field.value
+    const references = customerData.metafield?.references?.edges || []
+
+    const occasions = references
+      // Guard against references that failed to resolve, or that point at a
+      // different metaobject type than the one we expect
+      .map((edge) => edge?.node)
+      .filter((node) => node && node.id && (!node.type || node.type === "customer_event"))
+      .map((metaobject) => {
+        const fields = {}
+
+        // Convert fields array to object
+        ;(metaobject.fields || []).forEach((field) => {
+          fields[field.key] = field.value
+        })
+
+        return {
+          id: metaobject.id,
+          handle: metaobject.handle,
+          occasion_name: fields.occasion_name || "",
+          type: fields.type || "",
+          date: fields.date || "",
+          other_occasion: fields.other_occasion || "",
+        }
       })
-
-      return {
-        id: metaobject.id,
-        handle: metaobject.handle,
-        occasion_name: fields.occasion_name || "",
-        type: fields.type || "",
-        date: fields.date || "",
-        other_occasion: fields.other_occasion || "",
-      }
-    })
 
     console.log("[v0] SUCCESS: Found", occasions.length, "occasions")
     console.log("[v0] Occasions:", occasions)
